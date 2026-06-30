@@ -1,78 +1,70 @@
+"""Fresnel propagation through a parabolic refracting surface.
+
+A collimated beam crosses a parabolic interface between media n1 and n2
+(thin-element phase approximation) and is propagated to the paraxial focus
+at F = 2 f n2 / (n2 - n1), where it forms a diffraction-limited Airy spot.
+The focal region is evaluated with the zoom (matrix-DFT) Fresnel
+propagator, whose output sampling is independent of the input grid.
+
+Run with:  python examples/fresnel_with_parabolic_surface_phase.py
+"""
+
 import matplotlib.pyplot as plt
-import numpy as np
 
-from diffraction.apertures import circular_aperture
-from diffraction.propagation import fresnel_output_grid, fresnel_propagator
-from diffraction.surfaces import ParabolicSurface
-
-
-N = 1024
-L = 6e-3
-wavelength = 530e-9
-z_prop = 0.20
-
-n1 = 1.0
-n2 = 1.5
-f = 0.12  # Parabola focal length [m]
-z_vertex = 0.0
-
-x = np.linspace(-L / 2, L / 2, N)
-y = np.linspace(-L / 2, L / 2, N)
-X, Y = np.meshgrid(x, y)
-
-R0 = 0.8e-3
-U_amp = circular_aperture(X, Y, R0).astype(np.complex128)
-
-surface = ParabolicSurface(focal_length=f, z0=z_vertex)
-sag = surface.sag(X, Y)
-k0 = 2.0 * np.pi / wavelength
-phase_mask = np.exp(1.0j * k0 * (n2 - n1) * sag)
-
-U_after_surface = U_amp * phase_mask
-x_out, y_out = fresnel_output_grid((X, Y), z=z_prop, λ=wavelength, n=n2)
-Uz = fresnel_propagator(U_after_surface, (X, Y), z=z_prop, λ=wavelength, n=n2)
-
-I_in = np.abs(U_after_surface) ** 2
-I_out = np.abs(Uz) ** 2
-I_in_log = np.log10(I_in + 1e-16)
-I_out_log = np.log10(I_out + 1e-16)
-
-fig, ax = plt.subplots(1, 3, figsize=(14, 4), constrained_layout=True)
-
-im0 = ax[0].imshow(
-    sag,
-    extent=[x.min(), x.max(), y.min(), y.max()],
-    origin="lower",
-    cmap="viridis",
+from diffraction import (
+    ParabolicSurface,
+    antialiased,
+    circular_aperture,
+    fresnel_zoom_propagator,
+    make_grid,
+    plot_intensity,
 )
-ax[0].set_title("Parabolic surface sag z(x,y) [m]")
-ax[0].set_xlabel("x [m]")
-ax[0].set_ylabel("y [m]")
-fig.colorbar(im0, ax=ax[0], fraction=0.046, pad=0.04)
 
-ax[1].imshow(
-    I_in_log,
-    extent=[x.min(), x.max(), y.min(), y.max()],
-    origin="lower",
-    cmap="hot",
-    vmin=-12,
-    vmax=0,
-)
-ax[1].set_title("Intensity after phase mask")
-ax[1].set_xlabel("x [m]")
-ax[1].set_ylabel("y [m]")
+N = 2048  # samples per side
+L = 6e-3  # grid side length [m]
+WAVELENGTH = 530e-9  # vacuum wavelength [m]
+N1, N2 = 1.0, 1.5  # refractive indices before / after the surface
+FOCAL_LENGTH = 0.12  # parabola focal length [m]
+RADIUS = 0.4e-3  # aperture radius [m] (sets the Airy spot scale at focus)
+ZOOM = 1.5e-3  # half-width of the output focal window [m]
 
-ax[2].imshow(
-    I_out_log,
-    extent=[x_out.min(), x_out.max(), y_out.min(), y_out.max()],
-    origin="lower",
-    cmap="hot",
-    vmin=-12,
-    vmax=0,
-)
-ax[2].set_title(f"Fresnel propagated intensity (z={z_prop} m)")
-ax[2].set_xlabel("x [m]")
-ax[2].set_ylabel("y [m]")
 
-plt.suptitle(f"Fresnel with parabolic-surface phase (n1={n1}, n2={n2}, f={f} m)")
-plt.show()
+def main() -> None:
+    grid = make_grid(N, L)
+    x, y = grid
+
+    surface = ParabolicSurface(focal_length=FOCAL_LENGTH)
+    U0 = antialiased(circular_aperture, grid, RADIUS).astype(complex)
+    U_after = U0 * surface.phase_mask(grid, WAVELENGTH, N1, N2)
+
+    # Paraxial focus of the refracting parabola in medium n2.
+    z_focus = 2.0 * FOCAL_LENGTH * N2 / (N2 - N1)
+    Uz, grid_out = fresnel_zoom_propagator(
+        U_after,
+        grid,
+        z=z_focus,
+        wavelength=WAVELENGTH,
+        n=N2,
+        output_half_width=ZOOM,
+    )
+
+    fig, ax = plt.subplots(1, 3, figsize=(14, 4), constrained_layout=True)
+
+    im = ax[0].imshow(
+        surface.sag(x, y),
+        extent=[x.min(), x.max(), y.min(), y.max()],
+        origin="lower",
+        cmap="viridis",
+    )
+    ax[0].set_title("Parabolic surface sag z(x, y) [m]")
+    ax[0].set_xlabel("x [m]")
+    ax[0].set_ylabel("y [m]")
+    fig.colorbar(im, ax=ax[0], fraction=0.046, pad=0.04)
+
+    plot_intensity(ax[1], U_after, grid, title="Intensity after surface")
+    plot_intensity(ax[2], Uz, grid_out, title=f"Focal plane (z = {z_focus:.2f} m)", vmin=-4.0)
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()

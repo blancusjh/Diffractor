@@ -1,103 +1,71 @@
-from pathlib import Path
-import sys
+"""Fresnel propagation through a stigmatic Cartesian-oval surface.
+
+Collimated light (object at zo -> -inf) crosses the Cartesian refracting
+surface designed to image it perfectly at zi, and is propagated to that
+design image plane, where it forms a diffraction-limited Airy spot. The
+focal region is evaluated with the zoom (matrix-DFT) Fresnel propagator,
+whose output sampling is independent of the input grid.
+
+Run with:  python examples/fresnel_with_cartesian_surface_phase.py
+"""
 
 import matplotlib.pyplot as plt
-import numpy as np
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_DIR = PROJECT_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from apertures import circular_aperture
-from propagation import fresnel_output_grid, fresnel_propagator
-
-
-def cartesian_surface_coeffs(n1: float, n2: float, zo: float, zi: float):
-    G = (n2**2 - n1**2) ** 2 / (n2 * n1 * (n2 * zi - n1 * zo) * (n2 * zo - n1 * zi))
-    O = (n2 * zo - n1 * zi) / (zi * zo * (n2 - n1))
-    T = (n2 - n1) * (n1 + n2) ** 2 / (4 * n2 * n1 * zi * zo * (n2 * zi - n1 * zo))
-    S = (n2 + n1) * (n2**2 * zi - n1**2 * zo) / (2 * n2 * n1 * zi * zo * (n2 * zi - n1 * zo))
-    return G, O, T, S
-
-
-def cartesian_surface_sag(X: np.ndarray, Y: np.ndarray, n1: float, n2: float, zo: float, zi: float):
-    rho2 = X**2 + Y**2
-    G, O, T, S = cartesian_surface_coeffs(n1, n2, zo, zi)
-    radicand = 1.0 + (2.0 * S - (O**2) * G) * rho2
-    radicand = np.maximum(radicand, 0.0)
-    return ((O + T * rho2) * rho2) / (1.0 + S * rho2 + np.sqrt(radicand))
-
-
-N = 4024
-L = 6e-3
-wavelength = 530e-9
-z_prop = 0.20
-
-# Cartesian surface parameters requested by user
-n1 = 1.0
-n2 = 1.5
-zo = -100000.0
-zi = 1.0
-
-x = np.linspace(-L / 2, L / 2, N)
-y = np.linspace(-L / 2, L / 2, N)
-X, Y = np.meshgrid(x, y)
-
-R0 = 0.5e-4
-U_amp = circular_aperture(X, Y, R0).astype(np.complex128)
-
-sag = cartesian_surface_sag(X, Y, n1=n1, n2=n2, zo=zo, zi=zi)
-k0 = 2.0 * np.pi / wavelength
-phase_mask = np.exp(1.0j * k0 * (n1 - n2) * sag)
-
-U_after_surface = U_amp * phase_mask
-x_out, y_out = fresnel_output_grid((X, Y), z=z_prop, λ=wavelength, n=n2)
-Uz = fresnel_propagator(U_after_surface, (X, Y), z=z_prop, λ=wavelength, n=n2)
-
-I_in = np.abs(U_after_surface) ** 2
-I_out = np.abs(Uz) ** 2
-I_in_log = np.log10(I_in + 1e-16)
-I_out_log = np.log10(I_out + 1e-16)
-
-fig, ax = plt.subplots(1, 3, figsize=(14, 4), constrained_layout=True)
-
-im0 = ax[0].imshow(
-    sag,
-    extent=[x.min(), x.max(), y.min(), y.max()],
-    origin="lower",
-    cmap="viridis",
+from diffraction import (
+    CartesianSurface,
+    antialiased,
+    circular_aperture,
+    fresnel_zoom_propagator,
+    make_grid,
+    plot_intensity,
 )
-ax[0].set_title("Cartesian surface sag z(x,y) [m]")
-ax[0].set_xlabel("x [m]")
-ax[0].set_ylabel("y [m]")
-fig.colorbar(im0, ax=ax[0], fraction=0.046, pad=0.04)
 
-ax[1].imshow(
-    I_in_log,
-    extent=[x.min(), x.max(), y.min(), y.max()],
-    origin="lower",
-    cmap="hot",
-    vmin=-12,
-    vmax=0,
-)
-ax[1].set_title("Intensity after phase mask")
-ax[1].set_xlabel("x [m]")
-ax[1].set_ylabel("y [m]")
+N = 2048  # samples per side
+L = 6e-3  # grid side length [m]
+WAVELENGTH = 530e-9  # vacuum wavelength [m]
+N1, N2 = 1.0, 1.5  # refractive indices before / after the surface
+ZO = -1e5  # object distance [m] (collimated illumination)
+ZI = 1.0  # design image distance [m]
+RADIUS = 0.4e-3  # aperture radius [m] (sets the Airy spot scale at focus)
+ZOOM = 2.0e-3  # half-width of the output focal window [m]
 
-ax[2].imshow(
-    I_out_log,
-    extent=[x_out.min(), x_out.max(), y_out.min(), y_out.max()],
-    origin="lower",
-    cmap="hot",
-    vmin=-12,
-    vmax=0,
-)
-ax[2].set_title(f"Propagated intensity (z={z_prop} m)")
-ax[2].set_xlabel("x [m]")
-ax[2].set_ylabel("y [m]")
 
-plt.suptitle(f"Fresnel propagation with Cartesian-surface phase (n1={n1}, n2={n2}, zo={zo}, zi={zi})")
-plt.show()
+def main() -> None:
+    grid = make_grid(N, L)
+    x, y = grid
+
+    surface = CartesianSurface(n1=N1, n2=N2, zo=ZO, zi=ZI)
+    U0 = antialiased(circular_aperture, grid, RADIUS).astype(complex)
+    U_after = U0 * surface.phase_mask(grid, WAVELENGTH, N1, N2)
+
+    # Propagate to the design image plane: the surface is stigmatic, so
+    # the spot there is limited only by aperture diffraction.
+    Uz, grid_out = fresnel_zoom_propagator(
+        U_after,
+        grid,
+        z=ZI,
+        wavelength=WAVELENGTH,
+        n=N2,
+        output_half_width=ZOOM,
+    )
+
+    fig, ax = plt.subplots(1, 3, figsize=(14, 4), constrained_layout=True)
+
+    im = ax[0].imshow(
+        surface.sag(x, y),
+        extent=[x.min(), x.max(), y.min(), y.max()],
+        origin="lower",
+        cmap="viridis",
+    )
+    ax[0].set_title("Cartesian surface sag z(x, y) [m]")
+    ax[0].set_xlabel("x [m]")
+    ax[0].set_ylabel("y [m]")
+    fig.colorbar(im, ax=ax[0], fraction=0.046, pad=0.04)
+
+    plot_intensity(ax[1], U_after, grid, title="Intensity after surface")
+    plot_intensity(ax[2], Uz, grid_out, title=f"Design image plane (z = {ZI} m)", vmin=-4.0)
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()
