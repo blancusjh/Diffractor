@@ -22,7 +22,6 @@ from diffraction import (
     antialiased,
     circular_aperture,
     make_grid,
-    to_device,
 )
 
 N = 2048  # samples per side — see the sampling note in simple_asm_diffraction.py:
@@ -40,15 +39,15 @@ Z_MIN, Z_MAX, N_FRAMES = 0.05, 0.16, 40
 
 def main() -> None:
     grid = make_grid(N, L)
-    U0 = antialiased(circular_aperture, grid, RADIUS).astype(complex)
+    U0 = antialiased(circular_aperture, grid, RADIUS)
 
     device = "gpu" if CUPY_AVAILABLE else "cpu"
     if device == "gpu":
-        U0 = to_device(U0, "gpu")
+        U0 = U0.to("gpu")
     tag = "[GPU]" if device == "gpu" else "[CPU]"
     print(f"Propagating a {N_FRAMES}-plane z-sweep on the {device.upper()} {tag}")
 
-    prop = AngularSpectrum(U0, grid, wavelength=WAVELENGTH, pad_factor=2)
+    prop = AngularSpectrum(U0, wavelength=WAVELENGTH, pad_factor=2)
     zs = np.linspace(Z_MIN, Z_MAX, N_FRAMES)
 
     # log-intensity frames on the host, ready for display.

@@ -56,15 +56,20 @@ def test_elliptical_aperture():
 def test_antialiased_area_is_more_accurate():
     R = 0.5
     hard = circular_aperture(X, Y, R).sum() * DX * DX
-    soft = antialiased(circular_aperture, GRID, R, factor=8).sum() * DX * DX
+    soft = antialiased(circular_aperture, GRID, R, factor=8).values.real.sum() * DX * DX
 
     exact = np.pi * R**2
     assert abs(soft - exact) < abs(hard - exact)
     np.testing.assert_allclose(soft, exact, rtol=1e-4)
 
 
-def test_antialiased_values_and_kwargs():
-    t = antialiased(circular_aperture, GRID, 0.5, center=(0.1, 0.0))
+def test_antialiased_returns_field_and_kwargs():
+    from diffraction import Field
+
+    field = antialiased(circular_aperture, GRID, 0.5, center=(0.1, 0.0))
+    assert isinstance(field, Field)
+    assert field.grid is GRID
+    t = field.values.real
     assert ((0.0 <= t) & (t <= 1.0)).all()
     # Fully interior and exterior pixels stay binary.
     assert t[128, 128] == 1.0

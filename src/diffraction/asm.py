@@ -6,15 +6,16 @@ field is propagated to *many* distances — a focal z-sweep, a movie, a depth
 stack — that rebuild dominates the cost.
 
 :class:`AngularSpectrum` precomputes everything that does not depend on ``z``
-(the spatial-frequency grids, the longitudinal wavenumber ``kz`` and the FFT of
+(the spatial-frequency grid, the longitudinal wavenumber ``kz`` and the FFT of
 the input field) once, so each additional plane costs a single inverse FFT. The
 same object runs on the CPU (NumPy) or, if the input field is a CuPy array or
-``device="gpu"`` is requested, on an NVIDIA GPU — where the batched transform
-is typically one to two orders of magnitude faster.
+``device="gpu"`` is requested, on an NVIDIA GPU.
 
-The physics matches :func:`asm_propagator` exactly: the exact scalar transfer
-function ``exp(i kz z)``, the Matsushima–Shimobaba band limit and optional
-evanescent-wave decay. A regression test pins the two implementations together.
+With an explicit ``output_grid`` the inverse transform is sampled on a chosen
+grid (via a precomputed matrix DFT), decoupling the output window/sampling from
+the input — the MPASM / scaled-ASM capability.
+
+The physics matches :func:`asm_propagator` exactly on the native grid.
 """
 
 from __future__ import annotations
@@ -24,7 +25,8 @@ from typing import List, Optional, Sequence
 import numpy as np
 
 from .backend import array_module, asnumpy, resolve_module
-from .grids import Array, Grid, grid_spacing
+from .field import Field
+from .grids import Array, Grid
 
 __all__ = ["AngularSpectrum"]
 
@@ -44,42 +46,39 @@ class AngularSpectrum:
 
     Parameters
     ----------
-    U : 2D complex array
-        Input field sampled on ``grid`` (NumPy or CuPy).
-    grid : (x, y)
-        Spatial coordinate grids from :func:`numpy.meshgrid`.
+    field : Field
+        Input field (NumPy or CuPy values).
     wavelength : float
         Vacuum wavelength [m].
     n : float
         Refractive index of the propagation medium.
+    output_grid : Grid, optional
+        If given, every plane is sampled on this grid via a precomputed matrix
+        DFT (decoupled output sampling; MPASM). ``None`` (default) returns each
+        plane on the input grid using the fast inverse FFT.
     include_evanescent : bool
-        Keep evanescent components (exponential decay) instead of filtering
-        them out. Default ``False``.
+        Keep evanescent components (exponential decay). Default ``False``.
     bandlimit : bool
-        Apply the Matsushima–Shimobaba band limit (default ``True``); zeroes
-        the frequencies whose sampled transfer-function phase aliases at the
-        requested distance.
+        Apply the Matsushima–Shimobaba band limit (default ``True``).
     pad_factor : int
-        Zero-pad the field by this factor before propagating and crop
-        afterwards (default 1), suppressing circular-convolution wrap-around.
+        Zero-pad the field by this factor before propagating (default 1),
+        suppressing circular-convolution wrap-around.
     device : {"cpu", "gpu"} or None
-        Force a backend. ``None`` (default) keeps the field on whatever device
-        it already lives on: a NumPy field stays on the CPU, a CuPy field on
-        the GPU.
+        Force a backend. ``None`` keeps the field on its current device.
 
     Notes
     -----
-    The input FFT is computed once at construction, so mutating ``U`` after
-    building the propagator has no effect — build a new one instead.
+    The input FFT is computed once at construction, so mutating the field
+    afterwards has no effect — build a new propagator instead.
     """
 
     def __init__(
         self,
-        U: Array,
-        grid: Grid,
+        field: Field,
         wavelength: float,
         n: float = 1.0,
         *,
+        output_grid: Optional[Grid] = None,
         include_evanescent: bool = False,
         bandlimit: bool = True,
         pad_factor: int = 1,
@@ -92,14 +91,18 @@ class AngularSpectrum:
         if pad_factor < 1:
             raise ValueError("pad_factor must be at least 1.")
 
+        grid = field.grid
+        U = field.values
         xp = resolve_module(device) if device is not None else array_module(U)
         self.xp = xp
+        self._grid = grid
         self.include_evanescent = include_evanescent
         self.bandlimit = bandlimit
         self.pad_factor = pad_factor
+        self.output_grid = output_grid
         self.wavelength_medium = wavelength / n
 
-        dx, dy = grid_spacing(grid)
+        dx, dy = grid.spacing
         self._dx, self._dy = dx, dy
 
         U = xp.asarray(U, dtype=xp.complex128)
@@ -108,10 +111,7 @@ class AngularSpectrum:
         if pad_factor > 1:
             self._pad_x = ((pad_factor - 1) * self._nx) // 2
             self._pad_y = ((pad_factor - 1) * self._ny) // 2
-            U = xp.pad(
-                U,
-                ((self._pad_y, self._pad_y), (self._pad_x, self._pad_x)),
-            )
+            U = xp.pad(U, ((self._pad_y, self._pad_y), (self._pad_x, self._pad_x)))
         else:
             self._pad_x = self._pad_y = 0
 
@@ -134,6 +134,16 @@ class AngularSpectrum:
             self._kz = 2.0 * np.pi * xp.sqrt(xp.maximum(cutoff - f2, 0.0))
 
         self._U_fft = _fft2c(xp, U)
+
+        # Precompute the inverse matrix-DFT operators for a decoupled output.
+        if output_grid is not None:
+            src_fx = fx1d  # padded native frequency axes
+            src_fy = fy1d
+            dst_x = xp.asarray(output_grid.x[0, :])
+            dst_y = xp.asarray(output_grid.y[:, 0])
+            self._Ex_inv = xp.exp(2.0j * np.pi * xp.outer(dst_x, src_fx))  # (Mx, NX)
+            self._Ey_inv = xp.exp(2.0j * np.pi * xp.outer(dst_y, src_fy))  # (My, NY)
+            self._inv_norm = 1.0 / (NY * NX)
 
     def _transfer(self, z: float):
         xp = self.xp
@@ -163,17 +173,21 @@ class AngularSpectrum:
             ]
         return Uz
 
-    def propagate(self, z: float) -> Array:
-        """Field at distance ``z``, on the propagator's device.
+    def propagate(self, z: float) -> Field:
+        """Field at distance ``z``.
 
-        Negative ``z`` back-propagates. The result shares the array module of
-        the input field (NumPy on the CPU, CuPy on the GPU).
+        Negative ``z`` back-propagates. The result carries the input grid (or
+        ``output_grid`` if one was set) and shares the input's array module.
         """
-        Uz = _ifft2c(self.xp, self._U_fft * self._transfer(z))
-        return self._crop(Uz)
+        spectrum = self._U_fft * self._transfer(z)
+        if self.output_grid is None:
+            Uz = self._crop(_ifft2c(self.xp, spectrum))
+            return Field(self._grid, Uz)
+        Uz = (self._Ey_inv @ spectrum @ self._Ex_inv.T) * self._inv_norm
+        return Field(self.output_grid, Uz)
 
-    def propagate_stack(self, zs: Sequence[float]) -> List[Array]:
-        """Fields at every distance in ``zs`` (list of on-device arrays)."""
+    def propagate_stack(self, zs: Sequence[float]) -> List[Field]:
+        """Fields at every distance in ``zs``."""
         return [self.propagate(float(z)) for z in zs]
 
     def intensity_stack(
@@ -193,7 +207,7 @@ class AngularSpectrum:
         xp = self.xp
         frames = []
         for z in zs:
-            I = xp.abs(self.propagate(float(z))) ** 2
+            I = xp.abs(self.propagate(float(z)).values) ** 2
             if normalize:
                 peak = I.max()
                 if peak > 0:

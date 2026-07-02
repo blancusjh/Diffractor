@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 
+from .field import Field
 from .grids import Array, Grid
 
 __all__ = ["intensity", "plot_intensity"]
 
 
-def intensity(U: Array, *, normalize: bool = True) -> Array:
-    """Return ``|U|²``, optionally normalized to a unit maximum."""
-    I = np.abs(U) ** 2
+def intensity(U: Union[Field, Array], *, normalize: bool = True) -> Array:
+    """Return ``|U|²`` of a field or array, optionally unit-normalized."""
+    values = U.values if isinstance(U, Field) else U
+    I = np.abs(values) ** 2
     if normalize and I.max() > 0:
         I = I / I.max()
     return I
@@ -21,8 +23,8 @@ def intensity(U: Array, *, normalize: bool = True) -> Array:
 
 def plot_intensity(
     ax,
-    U: Array,
-    grid: Grid,
+    field: Field,
+    grid: Optional[Grid] = None,
     *,
     title: Optional[str] = None,
     log: bool = True,
@@ -36,10 +38,11 @@ def plot_intensity(
     ----------
     ax : matplotlib axis
         Target axis.
-    U : 2D complex array
-        Field to display.
-    grid : (x, y)
-        Coordinates of the field samples, used for the plot extent.
+    field : Field
+        Field to display (its grid supplies the plot extent).
+    grid : Grid, optional
+        Deprecated / optional override of the extent grid; defaults to
+        ``field.grid``.
     log : bool
         If True (default), show ``log10`` of the normalized intensity
         clipped to ``[vmin, vmax]`` decades. The default 6-decade range
@@ -47,8 +50,10 @@ def plot_intensity(
         grid-sampled apertures; deeper floors mostly display the
         edge-quantization noise of the sampled masks.
     """
+    if grid is None:
+        grid = field.grid
     x, y = grid
-    I = intensity(U)
+    I = intensity(field)
     data = np.log10(I + 10.0 ** (vmin - 4)) if log else I
 
     # Fringe patterns are usually finer than the screen resolution;

@@ -38,12 +38,12 @@ RADIUS = 0.3e-3  # aperture radius [m]
 def main() -> None:
     grid = make_grid(N, L)
 
-    U0 = antialiased(circular_aperture, grid, RADIUS).astype(complex)
-    Uz = asm_propagator(U0, grid, z=Z, wavelength=WAVELENGTH, pad_factor=2)
+    U0 = antialiased(circular_aperture, grid, RADIUS)
+    Uz = asm_propagator(U0, z=Z, wavelength=WAVELENGTH, pad_factor=2)
 
     fig, ax = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
-    plot_intensity(ax[0], U0, grid, title="Input intensity")
-    plot_intensity(ax[1], Uz, grid, title=f"Propagated intensity (z = {Z} m)")
+    plot_intensity(ax[0], U0, title="Input intensity")
+    plot_intensity(ax[1], Uz, title=f"Propagated intensity (z = {Z} m)")
     plt.show()
 
 

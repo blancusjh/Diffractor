@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .field import Field
 from .grids import Array, Grid
 
 __all__ = ["CartesianSurface", "ParabolicSurface", "Surface", "thin_element_phase"]
@@ -44,20 +45,26 @@ class Surface(ABC):
     def sag(self, x: Array, y: Array) -> Array:
         """Return the sag ``z(x, y)`` [m]."""
 
-    def phase_mask(self, grid: Grid, wavelength: float, n1: float, n2: float) -> Array:
+    def phase_mask(self, grid: Grid, wavelength: float, n1: float, n2: float) -> Field:
         """Thin-element phase imprinted on a field crossing the surface.
 
         Parameters
         ----------
-        grid : (x, y)
-            Spatial coordinate grids.
+        grid : Grid
+            Spatial coordinate grid.
         wavelength : float
             Vacuum wavelength [m].
         n1, n2 : float
             Refractive indices before and after the surface.
+
+        Returns
+        -------
+        Field
+            The phase transmission as a field, ready to multiply onto a source
+            field on the same grid.
         """
         x, y = grid
-        return thin_element_phase(self.sag(x, y), wavelength, n1, n2)
+        return Field(grid, thin_element_phase(self.sag(x, y), wavelength, n1, n2))
 
 
 @dataclass(frozen=True)
