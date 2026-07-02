@@ -36,7 +36,6 @@ from diffraction import (
     antialiased,
     circular_aperture,
     make_grid,
-    to_device,
 )
 
 N = 1024  # samples per side
@@ -53,14 +52,14 @@ def main() -> None:
     grid = make_grid(N, L)
 
     surface = ParabolicSurface(focal_length=FOCAL_LENGTH)
-    U0 = antialiased(circular_aperture, grid, RADIUS).astype(complex)
+    U0 = antialiased(circular_aperture, grid, RADIUS)
     U_after = U0 * surface.phase_mask(grid, WAVELENGTH, N1, N2)
 
     z_focus = 2.0 * FOCAL_LENGTH * N2 / (N2 - N1)
 
     device = "gpu" if CUPY_AVAILABLE else "cpu"
     if device == "gpu":
-        U_after = to_device(U_after, "gpu")
+        U_after = U_after.to("gpu")
     tag = "[GPU/CuPy]" if device == "gpu" else "[CPU/NumPy]"
     print(f"Batched focus scan of {N_PLANES} planes on {device.upper()} {tag}")
 
@@ -71,7 +70,7 @@ def main() -> None:
     # ~360 mm scan, and without padding it wraps around the small (3 mm)
     # window through the FFT's periodic boundary, aliasing back in as a
     # spurious grid-aligned cross-hatch pattern.
-    prop = AngularSpectrum(U_after, grid, wavelength=WAVELENGTH, n=N2, pad_factor=2)
+    prop = AngularSpectrum(U_after, wavelength=WAVELENGTH, n=N2, pad_factor=2)
 
     zs = z_focus + np.linspace(-DEFOCUS_SPAN, DEFOCUS_SPAN, N_PLANES)
     stack = prop.intensity_stack(zs, normalize=False)  # host arrays, physical units

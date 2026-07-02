@@ -17,10 +17,11 @@ plus summary metrics from :func:`pv`, :func:`rms` and
 from __future__ import annotations
 
 from math import factorial
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import numpy as np
 
+from .field import Field
 from .grids import Array, Grid
 
 __all__ = [
@@ -122,8 +123,7 @@ def _pupil_polar(grid: Grid, radius: float, center: Tuple[float, float]) -> Tupl
 
 
 def fit_zernikes(
-    W: Array,
-    grid: Grid,
+    field: Field,
     radius: float,
     jmax: int = 15,
     *,
@@ -134,11 +134,10 @@ def fit_zernikes(
 
     Parameters
     ----------
-    W : 2D array
-        Wavefront / OPD samples (any units; the coefficients inherit them).
-        Samples outside the pupil are ignored; NaNs inside are ignored too.
-    grid : (x, y)
-        Spatial coordinates of the samples.
+    field : Field
+        Wavefront / OPD map (``field.values`` in any units; the coefficients
+        inherit them). Samples outside the pupil are ignored; NaNs inside are
+        ignored too.
     radius : float
         Pupil radius defining the unit disk of the polynomials.
     jmax : int
@@ -162,6 +161,8 @@ def fit_zernikes(
     if jmax < 1:
         raise ValueError("jmax must be >= 1.")
 
+    grid = field.grid
+    W = field.values
     rho, theta, inside = _pupil_polar(grid, radius, center)
     valid = inside & np.isfinite(W)
     rho_v, theta_v, W_v = rho[valid], theta[valid], np.asarray(W, dtype=float)[valid]
@@ -183,32 +184,40 @@ def synthesize_zernikes(
     radius: float,
     *,
     center: Tuple[float, float] = (0.0, 0.0),
-) -> Array:
-    """Wavefront map from Noll coefficients ``coeffs[j-1]``; NaN outside the pupil."""
+) -> Field:
+    """Wavefront map from Noll coefficients ``coeffs[j-1]`` as a :class:`Field`.
+
+    The field's ``values`` are the OPD, NaN outside the pupil.
+    """
     rho, theta, inside = _pupil_polar(grid, radius, center)
     W = np.zeros_like(rho)
     for j, c in enumerate(np.asarray(coeffs, dtype=float), start=1):
         if c != 0.0:
             W += c * zernike(j, rho, theta)
-    return np.where(inside, W, np.nan)
+    return Field(grid, np.where(inside, W, np.nan))
 
 
-def pv(W: Array, mask: Optional[Array] = None) -> float:
+def _wavefront_values(W: Union[Field, Array]) -> Array:
+    values = W.values if isinstance(W, Field) else W
+    return np.asarray(values, dtype=float)
+
+
+def pv(W: Union[Field, Array], mask: Optional[Array] = None) -> float:
     """Peak-to-valley of a wavefront map (NaNs and masked-out samples ignored)."""
-    W = np.asarray(W, dtype=float)
+    values = _wavefront_values(W)
     if mask is not None:
-        W = W[mask]
-    W = W[np.isfinite(W)]
-    return float(W.max() - W.min())
+        values = values[mask]
+    values = values[np.isfinite(values)]
+    return float(values.max() - values.min())
 
 
-def rms(W: Array, mask: Optional[Array] = None) -> float:
+def rms(W: Union[Field, Array], mask: Optional[Array] = None) -> float:
     """RMS of a wavefront map about its mean (NaNs and masked-out samples ignored)."""
-    W = np.asarray(W, dtype=float)
+    values = _wavefront_values(W)
     if mask is not None:
-        W = W[mask]
-    W = W[np.isfinite(W)]
-    return float(np.std(W))
+        values = values[mask]
+    values = values[np.isfinite(values)]
+    return float(np.std(values))
 
 
 def marechal_strehl(rms_waves: float) -> float:

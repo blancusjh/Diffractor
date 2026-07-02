@@ -33,12 +33,12 @@ def main() -> None:
     x, y = grid
 
     surface = CartesianSurface(n1=N1, n2=N2, zo=ZO, zi=ZI)
-    U0 = antialiased(circular_aperture, grid, RADIUS).astype(complex)
+    U0 = antialiased(circular_aperture, grid, RADIUS)
     U_after = U0 * surface.phase_mask(grid, WAVELENGTH, N1, N2)
 
     # Propagate to the design image plane, where the stigmatic surface
     # focuses the beam to a diffraction-limited spot.
-    Uz = asm_propagator(U_after, grid, z=ZI, wavelength=WAVELENGTH, n=N2, pad_factor=2)
+    Uz = asm_propagator(U_after, z=ZI, wavelength=WAVELENGTH, n=N2, pad_factor=2)
 
     fig, ax = plt.subplots(1, 3, figsize=(14, 4), constrained_layout=True)
 
@@ -53,8 +53,8 @@ def main() -> None:
     ax[0].set_ylabel("y [m]")
     fig.colorbar(im, ax=ax[0], fraction=0.046, pad=0.04)
 
-    plot_intensity(ax[1], U_after, grid, title="Intensity after surface")
-    plot_intensity(ax[2], Uz, grid, title=f"Design image plane (z = {ZI} m)")
+    plot_intensity(ax[1], U_after, title="Intensity after surface")
+    plot_intensity(ax[2], Uz, title=f"Design image plane (z = {ZI} m)")
     plt.show()
 
 

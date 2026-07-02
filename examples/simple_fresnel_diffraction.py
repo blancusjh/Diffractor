@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 from diffraction import (
     antialiased,
     circular_aperture,
-    fresnel_output_grid,
     fresnel_propagator,
     make_grid,
     plot_intensity,
@@ -27,13 +26,12 @@ RADIUS = 0.3e-3  # aperture radius [m]
 def main() -> None:
     grid = make_grid(N, L)
 
-    U0 = antialiased(circular_aperture, grid, RADIUS).astype(complex)
-    Uz = fresnel_propagator(U0, grid, z=Z, wavelength=WAVELENGTH)
-    grid_out = fresnel_output_grid(grid, z=Z, wavelength=WAVELENGTH)
+    U0 = antialiased(circular_aperture, grid, RADIUS)
+    Uz = fresnel_propagator(U0, z=Z, wavelength=WAVELENGTH)
 
     fig, ax = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
-    plot_intensity(ax[0], U0, grid, title="Input intensity")
-    plot_intensity(ax[1], Uz, grid_out, title=f"Propagated intensity (z = {Z} m)")
+    plot_intensity(ax[0], U0, title="Input intensity")
+    plot_intensity(ax[1], Uz, title=f"Propagated intensity (z = {Z} m)")
 
     # The single-FFT method's output window scales as wavelength*z/dx (see
     # fresnel_output_grid), which at z=1.15 m spans +/-104 mm — far wider than

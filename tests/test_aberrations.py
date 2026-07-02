@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from diffraction import (
+    Field,
     fit_zernikes,
     make_grid,
     marechal_strehl,
@@ -62,7 +63,8 @@ def test_fit_recovers_synthesized_coefficients():
     true[10] = 0.35  # spherical
 
     W = synthesize_zernikes(true, grid, radius)
-    fitted = fit_zernikes(W, grid, radius, jmax=15)
+    assert isinstance(W, Field)
+    fitted = fit_zernikes(W, radius, jmax=15)
     np.testing.assert_allclose(fitted, true, atol=1e-8)
 
 
@@ -73,7 +75,7 @@ def test_quartic_decomposition():
     W = (x**2 + y**2) ** 2
     W[np.sqrt(x**2 + y**2) > 1.0] = np.nan
 
-    c = fit_zernikes(W, grid, 1.0, jmax=15)
+    c = fit_zernikes(Field(grid, W), 1.0, jmax=15)
     np.testing.assert_allclose(c[0], 1.0 / 3.0, atol=1e-4)
     np.testing.assert_allclose(c[3], 1.0 / (2.0 * np.sqrt(3)), atol=1e-4)
     np.testing.assert_allclose(c[10], 1.0 / (6.0 * np.sqrt(5)), atol=1e-4)
@@ -92,11 +94,11 @@ def test_metrics():
 
 def test_fit_validation():
     grid = make_grid(64, 2.0)
-    W = np.ones((64, 64))
+    W = Field(grid, np.ones((64, 64)))
     with pytest.raises(ValueError):
-        fit_zernikes(W, grid, radius=-1.0)
+        fit_zernikes(W, radius=-1.0)
     with pytest.raises(ValueError):
-        fit_zernikes(W, grid, radius=1.0, jmax=0)
+        fit_zernikes(W, radius=1.0, jmax=0)
 
 
 def test_zernike_name():

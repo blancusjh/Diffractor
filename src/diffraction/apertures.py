@@ -16,6 +16,7 @@ from typing import Callable, Tuple
 
 import numpy as np
 
+from .field import Field
 from .grids import Array, Grid, grid_spacing
 
 __all__ = [
@@ -33,7 +34,7 @@ Center = Tuple[float, float]
 
 def antialiased(
     f: Callable[..., Array], grid: Grid, *params, factor: int = 4, **kwargs
-) -> Array:
+) -> Field:
     """Evaluate a boolean aperture with grey (area-coverage) edge pixels.
 
     The mask is sampled on a ``factor × factor`` subgrid inside every pixel
@@ -45,15 +46,16 @@ def antialiased(
     ----------
     f : callable
         Any mask function from this module, ``f(x, y, *params, **kwargs)``.
-    grid : (x, y)
-        Spatial coordinate grids from :func:`numpy.meshgrid`.
+    grid : Grid
+        Spatial coordinate grid.
     factor : int
         Subsamples per pixel and axis (default 4, i.e. 16 per pixel).
 
     Returns
     -------
-    2D float array
-        Transmission in ``[0, 1]``.
+    Field
+        Complex transmission field in ``[0, 1]``, ready to use as a source or
+        to multiply onto another field on the same grid.
     """
     if factor < 1:
         raise ValueError("factor must be at least 1.")
@@ -65,7 +67,7 @@ def antialiased(
     for ox in offsets:
         for oy in offsets:
             acc += f(x + ox * dx, y + oy * dy, *params, **kwargs)
-    return acc / factor**2
+    return Field(grid, (acc / factor**2).astype(np.complex128))
 
 
 def circular_aperture(x: Array, y: Array, R: float, *, center: Center = (0.0, 0.0)) -> Array:

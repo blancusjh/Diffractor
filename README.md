@@ -4,8 +4,21 @@ A small, tested scalar-diffraction toolkit built on NumPy. It propagates
 complex optical fields with Fourier-optics methods and models apertures and
 thin refracting surfaces.
 
+A field is a first-class object — `Field(grid, values)`, the sampling `Grid`
+plus its complex samples — that flows through the whole pipeline (aperture →
+surface phase → propagator → plot). Coordinate queries live on the grid
+(`field.grid.x`, `field.grid.spacing`) and Fourier transforms are *operators*
+applied to a field (`FT2`, `IFT2`), not methods on it.
+
 ## Features
 
+- **Field & Grid** (`diffraction.field`, `diffraction.grids`) — `Field`
+  bundles a `Grid` with its samples; `Grid` owns coordinate access (`.x`,
+  `.y`, `.spacing`) and still unpacks as `x, y = grid`.
+- **Fourier operators** (`diffraction.fourier`) — `FFT2` / `IFFT2` (centered
+  array FFTs on the native grid) and `FT2` / `IFT2` (field operators that also
+  accept an explicit target grid and evaluate the transform there, via an exact
+  matrix DFT or an optional chirp-Z fast path). Plus `frequency_grid`.
 - **Propagators** (`diffraction.propagation`)
   - `fresnel_propagator` — single-FFT Fresnel (near-field, paraxial) method,
     with its scaled output plane given by `fresnel_output_grid`.
@@ -13,9 +26,9 @@ thin refracting surfaces.
   - `fresnel_zoom_propagator` — the same Fresnel integral evaluated by a
     direct (matrix) Fourier transform on a user-chosen output window, for
     resolving focal spots and other compact features.
-  - `asm_propagator` — angular-spectrum method (exact scalar transfer
-    function), same grid in and out, supports back-propagation (`z < 0`) and
-    optional evanescent-wave decay.
+  - `asm_propagator` — angular-spectrum method (`IFT2(H · FT2(field))`), same
+    grid in and out; supports back-propagation (`z < 0`), evanescent decay,
+    and — via an explicit `output_grid` — decoupled output sampling (MPASM).
 - **Batched / GPU propagation** (`diffraction.AngularSpectrum`) — a reusable
   angular-spectrum object that precomputes the transfer function and the input
   FFT once, so a z-sweep, movie or depth stack costs one inverse FFT per plane
@@ -26,9 +39,11 @@ thin refracting surfaces.
   GPU-rendered pan/zoom viewers for large fields: `plot_scalar_field` (2D),
   `plot_scalar_field_3d` (surface mesh) and `animate` (z-sweep movie with
   play/pause and frame-stepping).
-- **Fourier core** (`diffraction.fourier`) — centered `FFT2` / `IFFT2` pairs
-  and `frequency_grid`, so fields on symmetric grids transform without
-  phase-shift bookkeeping.
+- **Grid sizing** (`diffraction.sampling`) — `recommend_grid_convergence`
+  picks an adequate near-field grid by convergence testing (the honest fix for
+  input-side aliasing, which no output-grid trick can cure), plus the Fresnel
+  sampling criteria `fresnel_min_distance` / `fresnel_max_spacing` and
+  `next_fft_size`.
 - **Apertures** (`diffraction.apertures`) — circular, rectangular, square,
   annular, elliptical and slit masks, all with adjustable centers, plus an
   `antialiased` wrapper that evaluates any mask with area-coverage (grey)
@@ -65,21 +80,34 @@ pip install -e ".[gpu]"   # + CuPy GPU backend (pick the wheel for your CUDA)
 ```python
 import matplotlib.pyplot as plt
 from diffraction import (
-    make_grid, circular_aperture,
-    fresnel_propagator, fresnel_output_grid, plot_intensity,
+    make_grid, antialiased, circular_aperture,
+    fresnel_propagator, plot_intensity,
 )
 
-grid = make_grid(2048, 6e-3)            # 2048×2048 samples over 6 mm
-x, y = grid
+grid = make_grid(2048, 6e-3)                       # 2048×2048 samples over 6 mm
 
-U0 = circular_aperture(x, y, 0.3e-3).astype(complex)
-Uz = fresnel_propagator(U0, grid, z=1.15, wavelength=532e-9)
-grid_out = fresnel_output_grid(grid, z=1.15, wavelength=532e-9)
+U0 = antialiased(circular_aperture, grid, 0.3e-3)  # a Field on the grid
+Uz = fresnel_propagator(U0, z=1.15, wavelength=532e-9)   # a Field on the scaled output grid
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
-plot_intensity(ax[0], U0, grid, title="Aperture")
-plot_intensity(ax[1], Uz, grid_out, title="Fresnel pattern at z = 1.15 m")
+plot_intensity(ax[0], U0, title="Aperture")
+plot_intensity(ax[1], Uz, title="Fresnel pattern at z = 1.15 m")
 plt.show()
+```
+
+### Fourier as an operator, on any grid
+
+```python
+from diffraction import FT2, IFT2, Grid
+import numpy as np
+
+spectrum = FT2(U0)                 # -> Field on the native frequency grid
+back = IFT2(spectrum)              # -> Field, IFT2(FT2(U0)) == U0
+
+# Sample the transform on a chosen (zoomed) frequency window instead:
+fx = np.linspace(-3e4, 3e4, 256)
+kx, ky = np.meshgrid(fx, fx)
+zoomed = FT2(U0, kgrid=Grid(kx, ky))   # exact matrix DFT (or chirp-Z with SciPy)
 ```
 
 ### Batched and GPU propagation
@@ -89,14 +117,13 @@ CuPy is installed:
 
 ```python
 import numpy as np
-from diffraction import AngularSpectrum, circular_aperture, make_grid
+from diffraction import AngularSpectrum, antialiased, circular_aperture, make_grid
 
 grid = make_grid(1024, 6e-3)
-x, y = grid
-U0 = circular_aperture(x, y, 0.3e-3).astype(complex)
+U0 = antialiased(circular_aperture, grid, 0.3e-3)
 
-prop = AngularSpectrum(U0, grid, wavelength=532e-9, pad_factor=2)  # device="gpu" to force CuPy
-frames = prop.intensity_stack(np.linspace(5e-3, 0.12, 60))         # 60 planes, one IFFT each
+prop = AngularSpectrum(U0, wavelength=532e-9, pad_factor=2)   # device="gpu" to force CuPy
+frames = prop.intensity_stack(np.linspace(5e-3, 0.12, 60))    # 60 planes, one IFFT each
 
 from diffraction import animate            # needs the 'viz' extra
 animate([np.log10(f + 1e-6) for f in frames], list(np.linspace(5e-3, 0.12, 60)))
@@ -114,7 +141,7 @@ from diffraction import ParabolicSurface, asm_propagator
 
 surface = ParabolicSurface(focal_length=0.12)
 U_after = U0 * surface.phase_mask(grid, wavelength=532e-9, n1=1.0, n2=1.5)
-Uz = asm_propagator(U_after, grid, z=0.2, wavelength=532e-9, n=1.5)
+Uz = asm_propagator(U_after, z=0.2, wavelength=532e-9, n=1.5)
 ```
 
 ## Examples
@@ -132,6 +159,8 @@ Runnable scripts live in [`examples/`](examples):
 | `aberration_measurement.py` | Zernike decomposition of the exact OPD of both surfaces; Maréchal Strehl cross-check |
 | `asm_zsweep_animation.py` | Batched `AngularSpectrum` z-sweep, GPU when available, animated with `diffraction.viz` (needs the `viz` extra to animate) |
 | `gpu_focus_viewer.py` | Batched `AngularSpectrum` focus scan through a lens surface, GPU when available, viewed with `diffraction.viz`'s 2D/3D VisPy viewers (needs the `viz` extra to view) |
+| `grid_decoupled_asm.py` | Resolving a focal spot with a decoupled `output_grid` (fine output sampling from a modest input `N`) |
+| `adaptive_grid_selection.py` | `recommend_grid_convergence` picking an adequate near-field grid; before/after cross-hatch → clean rings |
 
 ```bash
 python examples/simple_fresnel_diffraction.py
@@ -149,7 +178,7 @@ python examples/simple_fresnel_diffraction.py
   `kz = 2π √(1/λₘ² − fx² − fy²)`, and recomposed. Frequencies beyond the
   propagating band are filtered out (or, with `include_evanescent=True`,
   kept with exponential decay).
-- **Numerical hygiene.** Three artifact sources are handled explicitly:
+- **Numerical hygiene.** Four artifact sources are handled explicitly:
   (1) the sampled ASM transfer function aliases at high frequencies for
   long distances — the Matsushima–Shimobaba band limit (`bandlimit=True`,
   the default) zeroes the undersampled band; (2) the FFT convolution is
@@ -157,11 +186,22 @@ python examples/simple_fresnel_diffraction.py
   `pad_factor=2` zero-pads before propagating and crops afterwards;
   (3) hard-edged masks have pixelated edges whose spurious spectral
   content shows up as streaks in the far field — `antialiased(...)`
-  evaluates masks with area-coverage edge pixels.
+  evaluates masks with area-coverage edge pixels; (4) a hard aperture in
+  the deep near field (high Fresnel number) develops boundary-wave ripples
+  finer than a coarse `dx`, and the undersampled content folds back as a
+  non-physical axis-aligned cross-hatch — this is an *input* sampling limit
+  (`k_max = π/dx` is set by `dx` alone), so it is fixed only by a finer
+  `dx`, which `recommend_grid_convergence` sizes for you.
+- **Decoupled output grids.** An explicit `output_grid` (on `asm_propagator`,
+  `AngularSpectrum` and `fresnel_zoom_propagator`, or an explicit `kgrid` on
+  `FT2`/`IFT2`) samples the transform on a grid of your choice via a matrix
+  DFT — resolving a focal spot at fine output sampling from a modest input
+  `N`. It decouples *output* sampling from the input; it does **not** relax
+  the input Nyquist requirement above, which no downstream transform can.
 - **Sampling.** For the single-FFT Fresnel method to be well sampled, the
   quadratic phase must vary slowly between samples: roughly
-  `z ≳ N dx² / λ`. The ASM prefers the opposite regime (short distances);
-  the two methods complement each other.
+  `z ≳ N dx² / λ` (exposed as `fresnel_min_distance`). The ASM prefers the
+  opposite regime (short distances); the two methods complement each other.
 
 ## Tests
 
@@ -178,10 +218,12 @@ pytest
 
 ```
 src/diffraction/
-├── fourier.py       # centered FFT2 / IFFT2, frequency_grid
-├── grids.py         # make_grid, grid_spacing
+├── grids.py         # Grid class, make_grid, grid_spacing
+├── field.py         # Field: grid + samples
+├── fourier.py       # FFT2 / IFFT2 and the FT2 / IFT2 operators, frequency_grid
 ├── propagation.py   # fresnel, fraunhofer, angular-spectrum propagators
 ├── asm.py           # AngularSpectrum: batched CPU/GPU angular spectrum
+├── sampling.py      # recommend_grid_convergence, Fresnel sampling criteria
 ├── backend.py       # CPU/GPU array-module resolution (NumPy / CuPy)
 ├── apertures.py     # aperture masks
 ├── fields.py        # gaussian_beam, plane_wave
