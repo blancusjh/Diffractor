@@ -20,6 +20,7 @@ import numpy as np
 
 from diffraction import (
     CartesianSurface,
+    Field,
     ParabolicSurface,
     fit_zernikes,
     make_grid,
@@ -49,11 +50,11 @@ def exact_opd_waves(surface):
     d1 = np.sqrt((z_s - ZO) ** 2 + r2)
     d2 = np.sqrt((ZI - z_s) ** 2 + r2)
     W = (N1 * d1 + N2 * d2 - (N1 * abs(ZO) + N2 * ZI)) / WAVELENGTH
-    return np.where(np.sqrt(r2) <= R_AP, W, np.nan)
+    return Field(GRID, np.where(np.sqrt(r2) <= R_AP, W, np.nan))
 
 
 def report(name, W):
-    c = fit_zernikes(W, GRID, R_AP, jmax=JMAX)
+    c = fit_zernikes(W, R_AP, jmax=JMAX)
     total_rms = np.sqrt(np.sum(c[1:] ** 2))  # about piston
     balanced = c.copy()
     balanced[[0, 1, 2, 3]] = 0.0  # remove piston, tilts and defocus
@@ -87,7 +88,7 @@ def main() -> None:
     fig, ax = plt.subplots(1, 3, figsize=(15, 4.3), constrained_layout=True)
 
     im = ax[0].imshow(
-        W_parab,
+        W_parab.values,
         extent=[x.min() * 1e3, x.max() * 1e3, y.min() * 1e3, y.max() * 1e3],
         origin="lower",
         cmap="RdBu_r",
@@ -109,9 +110,9 @@ def main() -> None:
     ax[1].legend(fontsize=8)
     ax[1].grid(alpha=0.3, axis="y")
 
-    ax[2].plot(r_mm, W_parab[row, N // 2 :], "C3", lw=2, label="paraboloid OPD (exact)")
-    ax[2].plot(r_mm, W_fit[row, N // 2 :], "k--", lw=1, label=f"Zernike fit (j ≤ {JMAX})")
-    ax[2].plot(r_mm, W_oval[row, N // 2 :], "C2", label="Cartesian oval (≡ 0)")
+    ax[2].plot(r_mm, W_parab.values[row, N // 2 :], "C3", lw=2, label="paraboloid OPD (exact)")
+    ax[2].plot(r_mm, W_fit.values[row, N // 2 :], "k--", lw=1, label=f"Zernike fit (j ≤ {JMAX})")
+    ax[2].plot(r_mm, W_oval.values[row, N // 2 :], "C2", label="Cartesian oval (≡ 0)")
     ax[2].set_xlabel("r [mm]")
     ax[2].set_ylabel("OPD [waves]")
     ax[2].set_title("Radial profile and fit")

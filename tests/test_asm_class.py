@@ -4,6 +4,7 @@ import pytest
 from diffraction import (
     AngularSpectrum,
     CUPY_AVAILABLE,
+    Field,
     array_module,
     asm_propagator,
     asnumpy,
@@ -17,8 +18,7 @@ from diffraction import (
 def _field(n=128, length=4e-3):
     grid = make_grid(n, length)
     x, y = grid
-    U0 = circular_aperture(x, y, 0.8e-3).astype(complex)
-    return grid, U0
+    return Field(grid, circular_aperture(x, y, 0.8e-3).astype(complex))
 
 
 class TestBackend:
@@ -43,56 +43,52 @@ class TestBackend:
 class TestAngularSpectrumMatchesFunctional:
     @pytest.mark.parametrize("z", [0.0, 0.02, -0.02])
     def test_matches_default(self, z):
-        grid, U0 = _field()
-        expected = asm_propagator(U0, grid, z=z, wavelength=532e-9)
-        got = AngularSpectrum(U0, grid, wavelength=532e-9).propagate(z)
-        np.testing.assert_allclose(got, expected, atol=1e-12)
+        field = _field()
+        expected = asm_propagator(field, z=z, wavelength=532e-9)
+        got = AngularSpectrum(field, wavelength=532e-9).propagate(z)
+        np.testing.assert_allclose(got.values, expected.values, atol=1e-12)
 
     def test_matches_with_padding(self):
-        grid, U0 = _field()
-        expected = asm_propagator(U0, grid, z=0.03, wavelength=532e-9, pad_factor=2)
-        got = AngularSpectrum(U0, grid, wavelength=532e-9, pad_factor=2).propagate(0.03)
-        assert got.shape == U0.shape
-        np.testing.assert_allclose(got, expected, atol=1e-12)
+        field = _field()
+        expected = asm_propagator(field, z=0.03, wavelength=532e-9, pad_factor=2)
+        got = AngularSpectrum(field, wavelength=532e-9, pad_factor=2).propagate(0.03)
+        assert got.shape == field.shape
+        np.testing.assert_allclose(got.values, expected.values, atol=1e-12)
 
     def test_matches_evanescent(self):
-        grid, U0 = _field()
-        expected = asm_propagator(
-            U0, grid, z=1e-5, wavelength=532e-9, include_evanescent=True
-        )
+        field = _field()
+        expected = asm_propagator(field, z=1e-5, wavelength=532e-9, include_evanescent=True)
         got = AngularSpectrum(
-            U0, grid, wavelength=532e-9, include_evanescent=True
+            field, wavelength=532e-9, include_evanescent=True
         ).propagate(1e-5)
-        np.testing.assert_allclose(got, expected, atol=1e-12)
+        np.testing.assert_allclose(got.values, expected.values, atol=1e-12)
 
     def test_matches_without_bandlimit(self):
-        grid, U0 = _field()
-        expected = asm_propagator(U0, grid, z=0.05, wavelength=532e-9, bandlimit=False)
-        got = AngularSpectrum(U0, grid, wavelength=532e-9, bandlimit=False).propagate(
-            0.05
-        )
-        np.testing.assert_allclose(got, expected, atol=1e-12)
+        field = _field()
+        expected = asm_propagator(field, z=0.05, wavelength=532e-9, bandlimit=False)
+        got = AngularSpectrum(field, wavelength=532e-9, bandlimit=False).propagate(0.05)
+        np.testing.assert_allclose(got.values, expected.values, atol=1e-12)
 
     def test_medium_index(self):
-        grid, U0 = _field()
-        expected = asm_propagator(U0, grid, z=0.02, wavelength=532e-9, n=1.5)
-        got = AngularSpectrum(U0, grid, wavelength=532e-9, n=1.5).propagate(0.02)
-        np.testing.assert_allclose(got, expected, atol=1e-12)
+        field = _field()
+        expected = asm_propagator(field, z=0.02, wavelength=532e-9, n=1.5)
+        got = AngularSpectrum(field, wavelength=532e-9, n=1.5).propagate(0.02)
+        np.testing.assert_allclose(got.values, expected.values, atol=1e-12)
 
 
 class TestAngularSpectrumBatch:
     def test_stack_matches_individual(self):
-        grid, U0 = _field()
-        prop = AngularSpectrum(U0, grid, wavelength=532e-9)
+        field = _field()
+        prop = AngularSpectrum(field, wavelength=532e-9)
         zs = [0.0, 0.01, 0.02, 0.03]
         stack = prop.propagate_stack(zs)
         assert len(stack) == len(zs)
         for U, z in zip(stack, zs):
-            np.testing.assert_allclose(U, prop.propagate(z), atol=1e-12)
+            np.testing.assert_allclose(U.values, prop.propagate(z).values, atol=1e-12)
 
     def test_intensity_stack_normalized_and_real(self):
-        grid, U0 = _field()
-        prop = AngularSpectrum(U0, grid, wavelength=532e-9)
+        field = _field()
+        prop = AngularSpectrum(field, wavelength=532e-9)
         frames = prop.intensity_stack([0.01, 0.02], normalize=True)
         for f in frames:
             assert np.isrealobj(f)
@@ -101,37 +97,40 @@ class TestAngularSpectrumBatch:
 
     def test_energy_conserved_per_plane(self):
         grid = make_grid(256, 4e-3)
-        U0 = gaussian_beam(grid, waist=0.4e-3)
-        prop = AngularSpectrum(U0, grid, wavelength=532e-9)
-        e0 = np.sum(np.abs(U0) ** 2)
+        field = gaussian_beam(grid, waist=0.4e-3)
+        prop = AngularSpectrum(field, wavelength=532e-9)
+        e0 = np.sum(np.abs(field.values) ** 2)
         for z in (0.02, 0.05):
             Uz = prop.propagate(z)
-            np.testing.assert_allclose(np.sum(np.abs(Uz) ** 2), e0, rtol=1e-10)
+            np.testing.assert_allclose(np.sum(np.abs(Uz.values) ** 2), e0, rtol=1e-10)
+
+    def test_output_grid_matches_native(self):
+        field = _field()
+        native = AngularSpectrum(field, wavelength=532e-9).propagate(0.03)
+        decoupled = AngularSpectrum(
+            field, wavelength=532e-9, output_grid=field.grid
+        ).propagate(0.03)
+        np.testing.assert_allclose(decoupled.values, native.values, atol=1e-9)
 
 
 class TestValidation:
     def test_bad_wavelength(self):
-        grid, U0 = _field()
         with pytest.raises(ValueError):
-            AngularSpectrum(U0, grid, wavelength=-1.0)
+            AngularSpectrum(_field(), wavelength=-1.0)
 
     def test_bad_pad_factor(self):
-        grid, U0 = _field()
         with pytest.raises(ValueError):
-            AngularSpectrum(U0, grid, wavelength=532e-9, pad_factor=0)
+            AngularSpectrum(_field(), wavelength=532e-9, pad_factor=0)
 
     def test_unknown_device(self):
-        grid, U0 = _field()
         with pytest.raises(ValueError):
-            AngularSpectrum(U0, grid, wavelength=532e-9, device="quantum")
+            AngularSpectrum(_field(), wavelength=532e-9, device="quantum")
 
 
 @pytest.mark.skipif(not CUPY_AVAILABLE, reason="CuPy/GPU not available")
 class TestGPU:
     def test_gpu_matches_cpu(self):
-        grid, U0 = _field()
-        cpu = AngularSpectrum(U0, grid, wavelength=532e-9).propagate(0.03)
-        gpu = AngularSpectrum(
-            U0, grid, wavelength=532e-9, device="gpu"
-        ).propagate(0.03)
-        np.testing.assert_allclose(asnumpy(gpu), cpu, atol=1e-10)
+        field = _field()
+        cpu = AngularSpectrum(field, wavelength=532e-9).propagate(0.03)
+        gpu = AngularSpectrum(field, wavelength=532e-9, device="gpu").propagate(0.03)
+        np.testing.assert_allclose(asnumpy(gpu.values), cpu.values, atol=1e-10)

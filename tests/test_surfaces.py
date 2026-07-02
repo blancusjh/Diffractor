@@ -93,7 +93,7 @@ def test_cartesian_phase_mask_converges_to_design_image_point():
     mask = surface.phase_mask(grid, wavelength, n1, n2)
     k_m = 2 * np.pi * n2 / wavelength
     expected = np.exp(-1.0j * k_m * (x**2 + y**2) / (2.0 * zi))
-    np.testing.assert_allclose(np.angle(mask / expected), 0.0, atol=1e-6)
+    np.testing.assert_allclose(np.angle(mask.values / expected), 0.0, atol=1e-6)
 
 
 def test_thin_element_phase():
@@ -111,4 +111,4 @@ def test_surface_phase_mask_matches_thin_element_phase():
     grid = make_grid(32, 1e-3)
     x, y = grid
     expected = thin_element_phase(surface.sag(x, y), 500e-9, 1.0, 1.5)
-    np.testing.assert_allclose(surface.phase_mask(grid, 500e-9, 1.0, 1.5), expected)
+    np.testing.assert_allclose(surface.phase_mask(grid, 500e-9, 1.0, 1.5).values, expected)

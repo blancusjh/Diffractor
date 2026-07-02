@@ -34,8 +34,9 @@ from .apertures import (
 )
 from .asm import AngularSpectrum
 from .backend import CUPY_AVAILABLE, array_module, asnumpy, to_device
+from .field import Field
 from .fields import gaussian_beam, plane_wave
-from .fourier import FFT2, IFFT2, frequency_grid
+from .fourier import FFT2, FT2, IFFT2, IFT2, frequency_grid
 from .grids import Grid, grid_spacing, make_grid
 from .plotting import intensity, plot_intensity
 from .propagation import (
@@ -45,18 +46,29 @@ from .propagation import (
     fresnel_propagator,
     fresnel_zoom_propagator,
 )
+from .sampling import (
+    GridRecommendation,
+    fresnel_max_spacing,
+    fresnel_min_distance,
+    next_fft_size,
+    recommend_grid_convergence,
+)
 from .surfaces import CartesianSurface, ParabolicSurface, Surface, thin_element_phase
 from .viz import animate, plot_scalar_field, plot_scalar_field_3d
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "CUPY_AVAILABLE",
     "FFT2",
+    "FT2",
     "IFFT2",
+    "IFT2",
     "AngularSpectrum",
     "CartesianSurface",
+    "Field",
     "Grid",
+    "GridRecommendation",
     "ParabolicSurface",
     "Surface",
     "animate",
@@ -70,6 +82,8 @@ __all__ = [
     "fit_zernikes",
     "fraunhofer_propagator",
     "frequency_grid",
+    "fresnel_max_spacing",
+    "fresnel_min_distance",
     "fresnel_output_grid",
     "fresnel_propagator",
     "fresnel_zoom_propagator",
@@ -78,12 +92,14 @@ __all__ = [
     "intensity",
     "make_grid",
     "marechal_strehl",
+    "next_fft_size",
     "noll_to_nm",
     "plane_wave",
     "plot_intensity",
     "plot_scalar_field",
     "plot_scalar_field_3d",
     "pv",
+    "recommend_grid_convergence",
     "rectangular_aperture",
     "rms",
     "slit_aperture",

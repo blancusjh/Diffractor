@@ -1,7 +1,7 @@
 """Source fields.
 
-Helpers that build common input fields on a sampling grid, always returned
-as complex arrays ready to feed the propagators.
+Helpers that build common input fields on a sampling grid, returned as
+:class:`~diffraction.field.Field` objects ready to feed the propagators.
 """
 
 from __future__ import annotations
@@ -10,12 +10,13 @@ from typing import Tuple
 
 import numpy as np
 
-from .grids import Array, Grid
+from .field import Field
+from .grids import Grid
 
 __all__ = ["gaussian_beam", "plane_wave"]
 
 
-def gaussian_beam(grid: Grid, waist: float, *, center: Tuple[float, float] = (0.0, 0.0)) -> Array:
+def gaussian_beam(grid: Grid, waist: float, *, center: Tuple[float, float] = (0.0, 0.0)) -> Field:
     """Fundamental Gaussian beam at its waist plane.
 
     Amplitude profile ``exp(-r² / w0²)`` with ``1/e`` field radius ``waist``.
@@ -25,7 +26,7 @@ def gaussian_beam(grid: Grid, waist: float, *, center: Tuple[float, float] = (0.
     x, y = grid
     x0, y0 = center
     r2 = (x - x0) ** 2 + (y - y0) ** 2
-    return np.exp(-r2 / waist**2).astype(np.complex128)
+    return Field(grid, np.exp(-r2 / waist**2).astype(np.complex128))
 
 
 def plane_wave(
@@ -35,7 +36,7 @@ def plane_wave(
     theta_x: float = 0.0,
     theta_y: float = 0.0,
     n: float = 1.0,
-) -> Array:
+) -> Field:
     """Unit-amplitude plane wave, optionally tilted.
 
     Parameters
@@ -53,4 +54,5 @@ def plane_wave(
         raise ValueError("wavelength must be positive.")
     x, y = grid
     k = 2 * np.pi * n / wavelength
-    return np.exp(1.0j * k * (np.sin(theta_x) * x + np.sin(theta_y) * y))
+    values = np.exp(1.0j * k * (np.sin(theta_x) * x + np.sin(theta_y) * y))
+    return Field(grid, values.astype(np.complex128))
