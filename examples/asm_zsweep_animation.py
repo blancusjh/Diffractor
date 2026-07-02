@@ -25,11 +25,17 @@ from diffraction import (
     to_device,
 )
 
-N = 1024  # samples per side
+N = 2048  # samples per side — see the sampling note in simple_asm_diffraction.py:
+# a coarser grid under-resolves the near-field boundary-wave ripples of this
+# small aperture and leaves an axis-aligned aliasing artifact in the
+# mid-sweep frames.
 L = 6e-3  # grid side length [m]
 WAVELENGTH = 532e-9  # vacuum wavelength [m]
 RADIUS = 0.3e-3  # aperture radius [m]
-Z_MIN, Z_MAX, N_FRAMES = 5e-3, 0.12, 60
+# The boundary-wave ripple frequency grows as z shrinks (Fresnel number
+# R^2/(lambda z)), so N=2048 only resolves it cleanly from z >~ 45 mm on;
+# starting the sweep there keeps every frame alias-free.
+Z_MIN, Z_MAX, N_FRAMES = 0.05, 0.16, 40
 
 
 def main() -> None:
