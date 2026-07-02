@@ -16,6 +16,16 @@ thin refracting surfaces.
   - `asm_propagator` — angular-spectrum method (exact scalar transfer
     function), same grid in and out, supports back-propagation (`z < 0`) and
     optional evanescent-wave decay.
+- **Batched / GPU propagation** (`diffraction.AngularSpectrum`) — a reusable
+  angular-spectrum object that precomputes the transfer function and the input
+  FFT once, so a z-sweep, movie or depth stack costs one inverse FFT per plane
+  (`propagate`, `propagate_stack`, `intensity_stack`). Runs on the CPU (NumPy)
+  or, with the `gpu` extra, on an NVIDIA GPU (CuPy) — chosen automatically from
+  the input array or forced with `device="gpu"`.
+- **Interactive viewers** (`diffraction.viz`, optional `viz` extra) — VisPy,
+  GPU-rendered pan/zoom viewers for large fields: `plot_scalar_field` (2D),
+  `plot_scalar_field_3d` (surface mesh) and `animate` (z-sweep movie with
+  play/pause and frame-stepping).
 - **Fourier core** (`diffraction.fourier`) — centered `FFT2` / `IFFT2` pairs
   and `frequency_grid`, so fields on symmetric grids transform without
   phase-shift bookkeeping.
@@ -30,6 +40,9 @@ thin refracting surfaces.
 - **Aberrations** (`diffraction.aberrations`) — Noll-indexed, RMS-normalized
   Zernike polynomials, least-squares wavefront fitting (`fit_zernikes`),
   synthesis, PV/RMS metrics and the Maréchal Strehl estimate.
+- **Backends** (`diffraction.backend`) — CPU/GPU array-module resolution
+  (`array_module`, `asnumpy`, `to_device`) so the numerical core runs
+  unchanged on NumPy or CuPy.
 - **Helpers** — `make_grid` for FFT-friendly sampling grids and
   `plot_intensity` for quick log-intensity figures.
 
@@ -41,7 +54,10 @@ wavelength and `n` the refractive index of the propagation medium.
 ```bash
 git clone https://github.com/blancusjh/diffractor.git
 cd diffractor
-pip install -e .          # or: pip install -e ".[dev]" to run the tests
+pip install -e .          # core (NumPy + matplotlib)
+pip install -e ".[dev]"   # + pytest, to run the tests
+pip install -e ".[viz]"   # + VisPy interactive viewers (diffraction.viz)
+pip install -e ".[gpu]"   # + CuPy GPU backend (pick the wheel for your CUDA)
 ```
 
 ## Quick start
@@ -64,6 +80,26 @@ fig, ax = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
 plot_intensity(ax[0], U0, grid, title="Aperture")
 plot_intensity(ax[1], Uz, grid_out, title="Fresnel pattern at z = 1.15 m")
 plt.show()
+```
+
+### Batched and GPU propagation
+
+Build the propagator once, then sweep many planes cheaply — on the GPU when
+CuPy is installed:
+
+```python
+import numpy as np
+from diffraction import AngularSpectrum, circular_aperture, make_grid
+
+grid = make_grid(1024, 6e-3)
+x, y = grid
+U0 = circular_aperture(x, y, 0.3e-3).astype(complex)
+
+prop = AngularSpectrum(U0, grid, wavelength=532e-9, pad_factor=2)  # device="gpu" to force CuPy
+frames = prop.intensity_stack(np.linspace(5e-3, 0.12, 60))         # 60 planes, one IFFT each
+
+from diffraction import animate            # needs the 'viz' extra
+animate([np.log10(f + 1e-6) for f in frames], list(np.linspace(5e-3, 0.12, 60)))
 ```
 
 ### Propagating through a refracting surface
@@ -94,6 +130,7 @@ Runnable scripts live in [`examples/`](examples):
 | `asm_with_cartesian_surface_phase.py` | Stigmatic Cartesian-oval surface, ASM propagation |
 | `cartesian_vs_parabolic_aberration.py` | Spherical aberration of the paraxial (parabolic) approximation vs the exact oval (needs `scipy`) |
 | `aberration_measurement.py` | Zernike decomposition of the exact OPD of both surfaces; Maréchal Strehl cross-check |
+| `asm_zsweep_animation.py` | Batched `AngularSpectrum` z-sweep, GPU when available, animated with `diffraction.viz` (needs the `viz` extra to animate) |
 
 ```bash
 python examples/simple_fresnel_diffraction.py
@@ -143,10 +180,14 @@ src/diffraction/
 ├── fourier.py       # centered FFT2 / IFFT2, frequency_grid
 ├── grids.py         # make_grid, grid_spacing
 ├── propagation.py   # fresnel, fraunhofer, angular-spectrum propagators
+├── asm.py           # AngularSpectrum: batched CPU/GPU angular spectrum
+├── backend.py       # CPU/GPU array-module resolution (NumPy / CuPy)
 ├── apertures.py     # aperture masks
 ├── fields.py        # gaussian_beam, plane_wave
 ├── surfaces.py      # ParabolicSurface, CartesianSurface, thin-element phase
-└── plotting.py      # intensity display helpers
+├── aberrations.py   # Zernike fitting, PV/RMS, Maréchal Strehl
+├── plotting.py      # matplotlib intensity display helpers
+└── viz.py           # optional VisPy interactive viewers + animation
 examples/            # runnable demo scripts
 tests/               # pytest suite
 ```
