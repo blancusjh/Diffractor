@@ -34,6 +34,18 @@ def main() -> None:
     fig, ax = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
     plot_intensity(ax[0], U0, grid, title="Input intensity")
     plot_intensity(ax[1], Uz, grid_out, title=f"Propagated intensity (z = {Z} m)")
+
+    # The single-FFT method's output window scales as wavelength*z/dx (see
+    # fresnel_output_grid), which at z=1.15 m spans +/-104 mm — far wider than
+    # the Airy pattern it contains (first null at ~1.24 mm here). Zoom to the
+    # pattern itself; otherwise imshow has to bin hundreds of fringes into a
+    # handful of display pixels, and the resulting moire looks like noise
+    # even though the underlying field is a clean, correctly-sampled Airy
+    # pattern (verified against the analytic first-null radius in the tests).
+    zoom = 3.0e-3
+    ax[1].set_xlim(-zoom, zoom)
+    ax[1].set_ylim(-zoom, zoom)
+
     plt.show()
 
 

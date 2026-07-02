@@ -131,6 +131,7 @@ Runnable scripts live in [`examples/`](examples):
 | `cartesian_vs_parabolic_aberration.py` | Spherical aberration of the paraxial (parabolic) approximation vs the exact oval (needs `scipy`) |
 | `aberration_measurement.py` | Zernike decomposition of the exact OPD of both surfaces; Maréchal Strehl cross-check |
 | `asm_zsweep_animation.py` | Batched `AngularSpectrum` z-sweep, GPU when available, animated with `diffraction.viz` (needs the `viz` extra to animate) |
+| `gpu_focus_viewer.py` | Batched `AngularSpectrum` focus scan through a lens surface, GPU when available, viewed with `diffraction.viz`'s 2D/3D VisPy viewers (needs the `viz` extra to view) |
 
 ```bash
 python examples/simple_fresnel_diffraction.py
