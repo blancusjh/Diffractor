@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "diffraction"
-version = "0.2.0"
+version = "0.3.0"
 description = "Scalar diffraction toolkit: Fresnel, Fraunhofer and angular-spectrum propagation with apertures and thin refracting surfaces"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,6 +25,17 @@ dev = [
 ]
 examples = [
   "scipy>=1.10",
+]
+# Interactive GPU-rendered viewers (diffraction.viz). PyQt6 is one possible
+# VisPy GUI backend; any supported backend works.
+viz = [
+  "vispy>=0.14",
+  "PyQt6>=6.5",
+]
+# GPU-accelerated propagation (diffraction.AngularSpectrum on CUDA). Pick the
+# CuPy wheel matching your CUDA toolkit, e.g. cupy-cuda11x.
+gpu = [
+  "cupy-cuda12x>=12.0",
 ]
 
 [tool.setuptools]

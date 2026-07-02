@@ -32,6 +32,8 @@ from .apertures import (
     slit_aperture,
     square_aperture,
 )
+from .asm import AngularSpectrum
+from .backend import CUPY_AVAILABLE, array_module, asnumpy, to_device
 from .fields import gaussian_beam, plane_wave
 from .fourier import FFT2, IFFT2, frequency_grid
 from .grids import Grid, grid_spacing, make_grid
@@ -44,19 +46,25 @@ from .propagation import (
     fresnel_zoom_propagator,
 )
 from .surfaces import CartesianSurface, ParabolicSurface, Surface, thin_element_phase
+from .viz import animate, plot_scalar_field, plot_scalar_field_3d
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
+    "CUPY_AVAILABLE",
     "FFT2",
     "IFFT2",
+    "AngularSpectrum",
     "CartesianSurface",
     "Grid",
     "ParabolicSurface",
     "Surface",
+    "animate",
     "annular_aperture",
     "antialiased",
+    "array_module",
     "asm_propagator",
+    "asnumpy",
     "circular_aperture",
     "elliptical_aperture",
     "fit_zernikes",
@@ -73,6 +81,8 @@ __all__ = [
     "noll_to_nm",
     "plane_wave",
     "plot_intensity",
+    "plot_scalar_field",
+    "plot_scalar_field_3d",
     "pv",
     "rectangular_aperture",
     "rms",
@@ -80,6 +90,7 @@ __all__ = [
     "square_aperture",
     "synthesize_zernikes",
     "thin_element_phase",
+    "to_device",
     "zernike",
     "zernike_name",
 ]
