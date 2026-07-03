@@ -44,6 +44,16 @@ applied to a field (`FT2`, `IFT2`), not methods on it.
   input-side aliasing, which no output-grid trick can cure), plus the Fresnel
   sampling criteria `fresnel_min_distance` / `fresnel_max_spacing` and
   `next_fft_size`.
+- **Polychromatic rendering** (`diffraction.polychromatic`,
+  `diffraction.colorimetry`) — `propagate_polychromatic` propagates a
+  broadband field wavelength-by-wavelength onto a shared output grid and
+  composites the result to an sRGB image through the CIE 1931 color-matching
+  functions (analytic Wyman fit — no data file), with D65 / blackbody
+  illuminants. `wavelength_to_rgb`, `spectrum_to_srgb`, `plot_rgb`.
+- **Gratings** (`diffraction.gratings`) — amplitude (`ronchi_grating`,
+  `sinusoidal_amplitude_grating`), 2D `cross_grating`, and chromatic
+  `phase_grating` (sinusoidal / binary / blazed sawtooth). Orders land at
+  `x_m = m λ z / d`.
 - **Apertures** (`diffraction.apertures`) — circular, rectangular, square,
   annular, elliptical and slit masks, all with adjustable centers, plus an
   `antialiased` wrapper that evaluates any mask with area-coverage (grey)
@@ -110,6 +120,26 @@ kx, ky = np.meshgrid(fx, fx)
 zoomed = FT2(U0, kgrid=Grid(kx, ky))   # exact matrix DFT (or chirp-Z with SciPy)
 ```
 
+### White light through a grating
+
+```python
+import numpy as np
+from diffraction import (
+    make_grid, ronchi_grating, square_aperture, Field,
+    d65_weights, propagate_polychromatic, plot_rgb,
+)
+
+grid = make_grid(1024, 4e-3)
+x, y = grid
+grating = ronchi_grating(x, y, period=60e-6) * square_aperture(x, y, 1.2e-3)
+U0 = Field(grid, grating.astype(complex))
+
+wl = np.linspace(410e-9, 680e-9, 40)
+rgb, out = propagate_polychromatic(
+    U0, wl, z=0.5, weights=d65_weights(wl * 1e9), output_half_width=27e-3,
+)   # -> a white 0th order flanked by dispersed rainbow orders
+```
+
 ### Batched and GPU propagation
 
 Build the propagator once, then sweep many planes cheaply — on the GPU when
@@ -161,6 +191,9 @@ Runnable scripts live in [`examples/`](examples):
 | `gpu_focus_viewer.py` | Batched `AngularSpectrum` focus scan through a lens surface, GPU when available, viewed with `diffraction.viz`'s 2D/3D VisPy viewers (needs the `viz` extra to view) |
 | `grid_decoupled_asm.py` | Resolving a focal spot with a decoupled `output_grid` (fine output sampling from a modest input `N`) |
 | `adaptive_grid_selection.py` | `recommend_grid_convergence` picking an adequate near-field grid; before/after cross-hatch → clean rings |
+| `polychromatic_aperture.py` | White-light (D65) circular aperture → chromatic diffraction rings |
+| `diffraction_grating.py` | Monochromatic Ronchi grating far-field orders, positions verified against `m λ z / d` |
+| `white_light_grating.py` | White light dispersed into a spectrum by a grating (the polychromatic + grating showcase) |
 
 ```bash
 python examples/simple_fresnel_diffraction.py
@@ -198,6 +231,13 @@ python examples/simple_fresnel_diffraction.py
   DFT — resolving a focal spot at fine output sampling from a modest input
   `N`. It decouples *output* sampling from the input; it does **not** relax
   the input Nyquist requirement above, which no downstream transform can.
+- **Polychromatic rendering.** A broadband field is propagated one wavelength
+  at a time onto a **shared** output grid (via `fresnel_zoom_propagator` or
+  `asm_propagator(..., output_grid=...)`), so every wavelength lands on the
+  same physical screen and dispersive features appear at their true positions
+  with no resampling. The per-wavelength intensities are integrated against
+  the CIE 1931 color-matching functions to CIE XYZ and mapped to sRGB (with
+  add-white gamut handling and the sRGB gamma).
 - **Sampling.** For the single-FFT Fresnel method to be well sampled, the
   quadratic phase must vary slowly between samples: roughly
   `z ≳ N dx² / λ` (exposed as `fresnel_min_distance`). The ASM prefers the
@@ -226,10 +266,13 @@ src/diffraction/
 ├── sampling.py      # recommend_grid_convergence, Fresnel sampling criteria
 ├── backend.py       # CPU/GPU array-module resolution (NumPy / CuPy)
 ├── apertures.py     # aperture masks
+├── gratings.py      # amplitude / phase / blazed / 2D diffraction gratings
 ├── fields.py        # gaussian_beam, plane_wave
 ├── surfaces.py      # ParabolicSurface, CartesianSurface, thin-element phase
 ├── aberrations.py   # Zernike fitting, PV/RMS, Maréchal Strehl
-├── plotting.py      # matplotlib intensity display helpers
+├── colorimetry.py   # CIE 1931 CMF, wavelength/spectrum -> sRGB
+├── polychromatic.py # broadband propagation -> color image
+├── plotting.py      # matplotlib intensity + RGB display helpers
 └── viz.py           # optional VisPy interactive viewers + animation
 examples/            # runnable demo scripts
 tests/               # pytest suite
