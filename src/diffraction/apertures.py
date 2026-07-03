@@ -26,6 +26,8 @@ __all__ = [
     "elliptical_aperture",
     "lattice_aperture",
     "lattice_sites",
+    "nslit_aperture",
+    "polygon_aperture",
     "rectangular_aperture",
     "slit_aperture",
     "square_aperture",
@@ -125,6 +127,91 @@ def slit_aperture(
     if orientation == "y":
         return np.abs(x - x0) <= h
     raise ValueError("orientation must be 'x' or 'y'.")
+
+
+def polygon_aperture(
+    x: Array,
+    y: Array,
+    n_sides: int,
+    radius: float,
+    *,
+    rotation: float = 0.0,
+    center: Center = (0.0, 0.0),
+) -> Array:
+    """Regular convex polygon aperture (hexagon, triangle, …).
+
+    Built as the intersection of ``n_sides`` half-planes, one per edge, so the
+    result is exact (no filled-polygon rasterization). ``radius`` is the
+    circumradius (center-to-vertex); the flat-to-flat width is
+    ``2 radius cos(π/n_sides)``.
+
+    Parameters
+    ----------
+    n_sides : int
+        Number of sides (>= 3). ``6`` is a hexagon, ``3`` a triangle.
+    radius : float
+        Circumradius [m].
+    rotation : float
+        Rotation of the polygon [rad] (0 places an edge normal along +x).
+    center : (x0, y0)
+        Center of the polygon.
+    """
+    if n_sides < 3:
+        raise ValueError("n_sides must be >= 3.")
+    if radius <= 0:
+        raise ValueError("radius must be positive.")
+    x0, y0 = center
+    xr = x - x0
+    yr = y - y0
+    apothem = radius * np.cos(np.pi / n_sides)
+    inside = np.ones(np.broadcast(xr, yr).shape, dtype=bool)
+    for k in range(n_sides):
+        phi = rotation + 2.0 * np.pi * k / n_sides
+        inside &= (xr * np.cos(phi) + yr * np.sin(phi)) <= apothem
+    return inside
+
+
+def nslit_aperture(
+    x: Array,
+    y: Array,
+    n_slits: int,
+    slit_width: float,
+    spacing: float,
+    *,
+    orientation: str = "y",
+    center: Center = (0.0, 0.0),
+) -> Array:
+    """``n_slits`` parallel slits of width ``slit_width``, centered.
+
+    ``n_slits=2`` is Young's double slit. Slit ``k`` is centered at
+    ``(k - (n-1)/2) · spacing`` along the grating direction and is infinite
+    along the perpendicular axis (bound it with another aperture for a finite
+    beam). ``spacing`` is the center-to-center period.
+
+    Parameters
+    ----------
+    orientation : {"y", "x"}
+        ``"y"`` = slits vary along x (long in y), the usual vertical-slit
+        layout; ``"x"`` is the transpose.
+    """
+    if n_slits < 1:
+        raise ValueError("n_slits must be >= 1.")
+    if slit_width <= 0 or spacing <= 0:
+        raise ValueError("slit_width and spacing must be positive.")
+    x0, y0 = center
+    if orientation == "y":
+        u = x - x0
+    elif orientation == "x":
+        u = y - y0
+    else:
+        raise ValueError("orientation must be 'x' or 'y'.")
+
+    half = 0.5 * slit_width
+    mask = np.zeros(np.broadcast(x, y).shape, dtype=bool)
+    for k in range(n_slits):
+        offset = (k - (n_slits - 1) / 2.0) * spacing
+        mask |= np.abs(u - offset) <= half
+    return mask
 
 
 def lattice_sites(
