@@ -108,9 +108,17 @@ def propagate_polychromatic(
             )
         elif propagator == "asm":
             grid = out_grid if out_grid is not None else field.grid
+            # Take the fast native-FFT path whenever the target coordinates
+            # coincide with the field's own grid — also when a per-wavelength
+            # callable rebuilt the Field on an equal but distinct Grid object.
+            native = grid is field.grid or (
+                grid.shape == field.grid.shape
+                and np.array_equal(grid.x, field.grid.x)
+                and np.array_equal(grid.y, field.grid.y)
+            )
             out = asm_propagator(
                 field, z=z, wavelength=lam, n=n,
-                output_grid=None if grid is field.grid else grid,
+                output_grid=None if native else grid,
                 pad_factor=pad_factor,
             )
         else:

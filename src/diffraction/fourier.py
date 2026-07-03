@@ -44,17 +44,19 @@ _CZT_AUTO_MIN = 512
 
 
 def FFT2(g: np.ndarray) -> np.ndarray:
-    """Centered 2D FFT: shift, transform, shift back."""
-    g_ = np.fft.ifftshift(g)
-    G_ = np.fft.fft2(g_)
-    return np.fft.fftshift(G_)
+    """Centered 2D FFT: shift, transform, shift back (NumPy or CuPy input)."""
+    xp = array_module(g)
+    g_ = xp.fft.ifftshift(g)
+    G_ = xp.fft.fft2(g_)
+    return xp.fft.fftshift(G_)
 
 
 def IFFT2(G: np.ndarray) -> np.ndarray:
-    """Centered inverse 2D FFT: shift, inverse transform, shift back."""
-    G_ = np.fft.ifftshift(G)
-    g_ = np.fft.ifft2(G_)
-    return np.fft.fftshift(g_)
+    """Centered inverse 2D FFT: shift, inverse transform, shift back (NumPy or CuPy input)."""
+    xp = array_module(G)
+    G_ = xp.fft.ifftshift(G)
+    g_ = xp.fft.ifft2(G_)
+    return xp.fft.fftshift(g_)
 
 
 def frequency_grid(grid: Grid) -> Grid:
@@ -68,9 +70,10 @@ def frequency_grid(grid: Grid) -> Grid:
 
     Returns
     -------
-    (fx, fy) : tuple of 2D arrays
-        Spatial-frequency coordinates in cycles per unit length, centered
-        so that ``fx = fy = 0`` sits at the middle of the array.
+    Grid
+        Spatial-frequency coordinates in cycles per unit length (unpacks as
+        ``fx, fy = frequency_grid(grid)``), centered so that ``fx = fy = 0``
+        sits at the middle of the array.
     """
     x, y = grid
     if x.shape != y.shape:

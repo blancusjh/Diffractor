@@ -134,3 +134,28 @@ class TestGPU:
         cpu = AngularSpectrum(field, wavelength=532e-9).propagate(0.03)
         gpu = AngularSpectrum(field, wavelength=532e-9, device="gpu").propagate(0.03)
         np.testing.assert_allclose(asnumpy(gpu.values), cpu.values, atol=1e-10)
+
+
+def test_intensity_stack_normalize_modes():
+    import numpy as np
+    import pytest
+    from diffraction import AngularSpectrum, antialiased, circular_aperture, make_grid
+
+    grid = make_grid(128, 2e-3)
+    U0 = antialiased(circular_aperture, grid, 0.4e-3)
+    prop = AngularSpectrum(U0, wavelength=532e-9)
+    zs = [0.02, 0.05]
+
+    per_frame = prop.intensity_stack(zs)  # default True
+    assert all(np.isclose(f.max(), 1.0) for f in per_frame)
+
+    global_ = prop.intensity_stack(zs, normalize="global")
+    assert np.isclose(max(f.max() for f in global_), 1.0)
+    # only the globally-brightest frame reaches 1; ratios are preserved
+    raw = prop.intensity_stack(zs, normalize=False)
+    peak = max(f.max() for f in raw)
+    for g, r in zip(global_, raw):
+        np.testing.assert_allclose(g, r / peak)
+
+    with pytest.raises(ValueError):
+        prop.intensity_stack(zs, normalize="per-plane")

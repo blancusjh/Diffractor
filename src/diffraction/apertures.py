@@ -2,7 +2,10 @@
 
 Each function evaluates a boolean transmission mask on ``(x, y)`` coordinate
 arrays. Cast to complex (or multiply directly into a complex field) to use
-them as thin amplitude screens.
+them as thin amplitude screens. Exception: :func:`lattice_aperture` returns a
+*float* mask (its tiles may overlap or be antialiased), like the grating
+kernels in :mod:`diffraction.gratings` — combine those arithmetically
+(``*``, ``1 - m``) rather than with boolean operators.
 
 Hard-edged masks sampled on a Cartesian grid have jagged, pixelated edges
 whose spurious high-frequency content shows up as anisotropic streaks in
