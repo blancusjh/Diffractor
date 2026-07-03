@@ -7,6 +7,7 @@ from diffraction import (
     fresnel_zoom_propagator,
     make_grid,
     phase_grating,
+    polar_grating,
     ronchi_grating,
     sinusoidal_amplitude_grating,
     square_aperture,
@@ -104,6 +105,47 @@ def test_cross_grating_is_separable_2d():
     gx = ronchi_grating(X, Y, D, orientation="x")
     gy = ronchi_grating(X, Y, D, orientation="y")
     np.testing.assert_allclose(cg, gx * gy)
+
+
+def test_polar_grating_rings_are_rotationally_symmetric():
+    # A ring-only polar grating depends on radius alone: rotating the grid
+    # leaves the pattern unchanged.
+    rings = polar_grating(X, Y, radial_period=D)
+    rings_rot = polar_grating(Y, -X, radial_period=D)  # 90 deg rotation of coords
+    np.testing.assert_allclose(rings, rings_rot)
+    assert set(np.unique(rings)) <= {0.0, 1.0}
+
+
+def test_polar_grating_spokes_depend_only_on_angle():
+    # A spoke-only grating is constant along each ray: its value at radius r and
+    # 2r (same angle) matches. Sample a ring of angles at two radii.
+    ang = np.linspace(0.1, 2 * np.pi - 0.1, 37)
+    r1, r2 = 0.4e-3, 0.9e-3
+    t1 = polar_grating(r1 * np.cos(ang), r1 * np.sin(ang), n_spokes=8)
+    t2 = polar_grating(r2 * np.cos(ang), r2 * np.sin(ang), n_spokes=8)
+    np.testing.assert_allclose(t1, t2)
+    # 8 sectors at 50% duty -> half the full turn transmits
+    dense = np.linspace(-np.pi, np.pi, 100000, endpoint=False)
+    frac_open = polar_grating(np.cos(dense), np.sin(dense), n_spokes=8).mean()
+    np.testing.assert_allclose(frac_open, 0.5, atol=1e-3)
+
+
+def test_polar_grating_is_product_of_rings_and_spokes():
+    both = polar_grating(X, Y, radial_period=D, n_spokes=12)
+    rings = polar_grating(X, Y, radial_period=D)
+    spokes = polar_grating(X, Y, n_spokes=12)
+    np.testing.assert_allclose(both, rings * spokes)
+
+
+def test_polar_grating_validation():
+    with pytest.raises(ValueError):
+        polar_grating(X, Y)  # neither ring nor spokes
+    with pytest.raises(ValueError):
+        polar_grating(X, Y, radial_period=-1.0)
+    with pytest.raises(ValueError):
+        polar_grating(X, Y, n_spokes=0)
+    with pytest.raises(ValueError):
+        polar_grating(X, Y, n_spokes=8, duty=1.5)
 
 
 def test_grating_validation():
