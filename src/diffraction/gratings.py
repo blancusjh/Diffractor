@@ -27,6 +27,7 @@ __all__ = [
     "ronchi_grating",
     "sinusoidal_amplitude_grating",
     "cross_grating",
+    "polar_grating",
     "phase_grating",
 ]
 
@@ -111,6 +112,52 @@ def cross_grating(
     else:
         raise ValueError("kind must be 'ronchi' or 'sinusoidal'.")
     return gx * gy
+
+
+def polar_grating(
+    x: Array,
+    y: Array,
+    *,
+    radial_period: float | None = None,
+    n_spokes: int | None = None,
+    duty: float = 0.5,
+    center: Center = (0.0, 0.0),
+) -> Array:
+    """Binary grating periodic in polar coordinates — the polar `cross_grating`.
+
+    Combines two independent Ronchi-like binary profiles in polar coordinates:
+
+    * **concentric rings** — a square wave of radial period ``radial_period``
+      (a circular grating), which diffracts into ring-shaped orders at radii
+      ``m λ f / radial_period`` at a lens focus;
+    * **angular spokes** — ``n_spokes`` transmitting sectors over the full turn
+      (a Siemens-star pattern), which spreads energy into azimuthal orders.
+
+    Give either one alone, or both — with both, the result is their product, a
+    polar lattice of apertures whose focal pattern is a polar arrangement of
+    orders (the rotational analogue of the Cartesian lattice from
+    :func:`cross_grating`). ``duty`` is the transmitting fraction of each
+    period. At least one of ``radial_period`` / ``n_spokes`` must be given.
+    """
+    if radial_period is None and n_spokes is None:
+        raise ValueError("give at least one of radial_period or n_spokes.")
+    if not 0.0 < duty < 1.0:
+        raise ValueError("duty must be in (0, 1).")
+    x0, y0 = center
+    xr = x - x0
+    yr = y - y0
+    t = np.ones(np.broadcast(xr, yr).shape, dtype=float)
+    if radial_period is not None:
+        if radial_period <= 0:
+            raise ValueError("radial_period must be positive.")
+        r = np.hypot(xr, yr)
+        t = t * ((r / radial_period) % 1.0 < duty)
+    if n_spokes is not None:
+        if int(n_spokes) != n_spokes or n_spokes < 1:
+            raise ValueError("n_spokes must be a positive integer.")
+        theta = np.arctan2(yr, xr)
+        t = t * ((n_spokes * theta / (2.0 * np.pi)) % 1.0 < duty)
+    return t.astype(float)
 
 
 def _grating_sag(u: Array, period: float, height: float, profile: str) -> Array:

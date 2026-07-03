@@ -51,6 +51,7 @@ from .fourier import FFT2, FT2, IFFT2, IFT2, frequency_grid
 from .gratings import (
     cross_grating,
     phase_grating,
+    polar_grating,
     ronchi_grating,
     sinusoidal_amplitude_grating,
 )
@@ -131,6 +132,7 @@ __all__ = [
     "plot_rgb",
     "plot_scalar_field",
     "plot_scalar_field_3d",
+    "polar_grating",
     "polygon_aperture",
     "propagate_polychromatic",
     "pv",

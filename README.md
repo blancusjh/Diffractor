@@ -52,9 +52,9 @@ applied to a field (`FT2`, `IFT2`), not methods on it.
   illuminants and display controls (`saturation`, `stretch`, `brightness`) for
   vivid renders. `wavelength_to_rgb`, `spectrum_to_srgb`, `plot_rgb`.
 - **Gratings** (`diffraction.gratings`) — amplitude (`ronchi_grating`,
-  `sinusoidal_amplitude_grating`), 2D `cross_grating`, and chromatic
-  `phase_grating` (sinusoidal / binary / blazed sawtooth). Orders land at
-  `x_m = m λ z / d`.
+  `sinusoidal_amplitude_grating`), 2D `cross_grating`, polar `polar_grating`
+  (concentric rings × angular spokes), and chromatic `phase_grating`
+  (sinusoidal / binary / blazed sawtooth). Orders land at `x_m = m λ z / d`.
 - **Apertures** (`diffraction.apertures`) — circular, rectangular, square,
   annular, elliptical and slit masks, regular-polygon (`polygon_aperture`,
   e.g. a hexagon) and multi-slit (`nslit_aperture`, e.g. Young's double slit),
@@ -204,6 +204,7 @@ Runnable scripts live in [`examples/`](examples):
 | `hexagon_lens_star.py` | White-light hexagon at a lens focus → a six-pointed colored star (iris starburst) |
 | `grating_spectrometer.py` | Grating + lens spectrometer — a Ronchi grating giving symmetric focused spectra vs. a blazed grating steering the energy into one order |
 | `cross_grating_lens.py` | Square (cross) grating at a lens focus → a centered lattice of orders at `(m λ f / d, n λ f / d)`, monochromatic and white-light (each order dispersed) |
+| `polar_grating_lens.py` | Polar grating (rings × spokes) at a lens focus → a centered polar lattice of orders; the white-light ring orders disperse radially (blue in, red out) |
 
 ```bash
 python examples/simple_fresnel_diffraction.py
