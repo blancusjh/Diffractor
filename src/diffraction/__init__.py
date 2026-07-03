@@ -57,8 +57,18 @@ from .gratings import (
 )
 from .grids import Grid, grid_spacing, make_grid
 from .longitudinal import LongitudinalSection, longitudinal_field
-from .plotting import intensity, plot_intensity, plot_longitudinal, plot_rgb
-from .polychromatic import propagate_polychromatic
+from .plotting import (
+    intensity,
+    plot_intensity,
+    plot_longitudinal,
+    plot_rgb,
+    plot_rgb_longitudinal,
+)
+from .polychromatic import (
+    RGBLongitudinalSection,
+    propagate_polychromatic,
+    propagate_polychromatic_longitudinal,
+)
 from .propagation import (
     asm_propagator,
     fraunhofer_propagator,
@@ -97,6 +107,7 @@ __all__ = [
     "GridRecommendation",
     "LongitudinalSection",
     "ParabolicSurface",
+    "RGBLongitudinalSection",
     "Surface",
     "animate",
     "annular_aperture",
@@ -134,11 +145,13 @@ __all__ = [
     "plot_intensity",
     "plot_longitudinal",
     "plot_rgb",
+    "plot_rgb_longitudinal",
     "plot_scalar_field",
     "plot_scalar_field_3d",
     "polar_grating",
     "polygon_aperture",
     "propagate_polychromatic",
+    "propagate_polychromatic_longitudinal",
     "pv",
     "recommend_grid_convergence",
     "rectangular_aperture",

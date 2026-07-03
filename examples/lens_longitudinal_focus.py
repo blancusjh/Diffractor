@@ -6,10 +6,15 @@ is taken at every plane. Stacking those lines gives an ``x–z`` cross-section:
 the converging cone, the bright focal waist at ``z = f``, and the diverging
 cone beyond it — the field along the optical axis, drawn directly.
 
-The second panel zooms onto the waist with a *decoupled* transverse window
-(`output_half_width`): each plane is sampled on a fine matrix-DFT line, so the
-Airy-scale structure of the waist is resolved far below the input grid spacing
-without enlarging the input ``N``.
+Both panels use a *decoupled* transverse output line (`output_half_width`):
+each plane is sampled on a fine matrix-DFT line instead of the native grid.
+For the waist this resolves Airy-scale structure far below the input grid
+spacing; for the wide cone view it instead picks a transverse pixel size
+matched to the z-resolution, so the diagonal cone edges stay smooth — sampled
+on the native grid instead, the same smoothness would need roughly 4x more
+z-planes (the per-plane transverse shift, set by the cone's geometric slope
+``APERTURE_R / FOCAL_LENGTH``, must stay under one output pixel or the edges
+staircase).
 
 Uses `longitudinal_field` (an `AngularSpectrum` z-sweep sliced on axis) and
 `plot_longitudinal`.
@@ -33,7 +38,10 @@ L = 4e-3  # window [m]
 WAVELENGTH = 550e-9
 APERTURE_R = 1.4e-3  # lens/aperture radius [m]
 FOCAL_LENGTH = 0.10  # focal length [m]
-N_PLANES = 180
+CONE_HALF_WIDTH = 0.4e-3  # cone panel's displayed transverse half-width [m]
+CONE_SAMPLES = 140
+N_PLANES_CONE = 230
+N_PLANES_WAIST = 300
 
 
 def main() -> None:
@@ -45,13 +53,16 @@ def main() -> None:
 
     # Sweep from well before to well past the focus. The converging beam stays
     # well inside the window over this range, so no zero-padding is needed.
-    zs = np.linspace(0.55 * FOCAL_LENGTH, 1.45 * FOCAL_LENGTH, N_PLANES)
-    section = longitudinal_field(U0, WAVELENGTH, zs, axis="x", pad_factor=1)
+    zs = np.linspace(0.55 * FOCAL_LENGTH, 1.45 * FOCAL_LENGTH, N_PLANES_CONE)
+    section = longitudinal_field(
+        U0, WAVELENGTH, zs, axis="x", pad_factor=1,
+        output_half_width=CONE_HALF_WIDTH, output_samples=CONE_SAMPLES,
+    )
 
     # Zoom onto the waist itself with a decoupled fine transverse line: the
     # Airy radius here is ~24 µm — only a few input pixels at dx ≈ 3.9 µm.
     airy_radius = 0.61 * WAVELENGTH * FOCAL_LENGTH / APERTURE_R
-    zw = np.linspace(0.94 * FOCAL_LENGTH, 1.06 * FOCAL_LENGTH, 140)
+    zw = np.linspace(0.94 * FOCAL_LENGTH, 1.06 * FOCAL_LENGTH, N_PLANES_WAIST)
     waist = longitudinal_field(
         U0, WAVELENGTH, zw, axis="x", pad_factor=1,
         output_half_width=5.0 * airy_radius, output_samples=401,

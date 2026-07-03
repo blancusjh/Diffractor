@@ -9,6 +9,7 @@ import pytest
 from diffraction import (
     Field,
     LongitudinalSection,
+    RGBLongitudinalSection,
     antialiased,
     circular_aperture,
     intensity,
@@ -16,6 +17,7 @@ from diffraction import (
     plot_intensity,
     plot_longitudinal,
     plot_rgb,
+    plot_rgb_longitudinal,
 )
 
 
@@ -70,3 +72,20 @@ def test_plot_rgb_clips_and_extent(ax):
     im = plot_rgb(ax, rgb, grid)
     shown = im.get_array()
     assert shown.min() >= 0.0 and shown.max() <= 1.0
+
+
+def test_plot_rgb_longitudinal_clips_extent_and_labels(ax):
+    z = np.linspace(0.0, 1.0, 5)
+    t = np.linspace(-1e-3, 1e-3, 7)
+    rgb = np.random.default_rng(0).uniform(-0.2, 1.3, size=(5, 7, 3))
+    sec = RGBLongitudinalSection(rgb=rgb, z=z, t=t, axis="y")
+
+    im = plot_rgb_longitudinal(ax, sec)
+    shown = im.get_array()
+    assert shown.min() >= 0.0 and shown.max() <= 1.0
+    assert shown.shape == (7, 5, 3)  # transposed: t rows, z columns
+    x0, x1, y0, y1 = im.get_extent()
+    assert np.isclose(x0, z.min()) and np.isclose(x1, z.max())
+    assert np.isclose(y0, t.min()) and np.isclose(y1, t.max())
+    assert ax.get_xlabel() == "z [m]"
+    assert ax.get_ylabel() == "y [m]"
