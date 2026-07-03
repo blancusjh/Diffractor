@@ -6,6 +6,11 @@ is taken at every plane. Stacking those lines gives an ``x–z`` cross-section:
 the converging cone, the bright focal waist at ``z = f``, and the diverging
 cone beyond it — the field along the optical axis, drawn directly.
 
+The second panel zooms onto the waist with a *decoupled* transverse window
+(`output_half_width`): each plane is sampled on a fine matrix-DFT line, so the
+Airy-scale structure of the waist is resolved far below the input grid spacing
+without enlarging the input ``N``.
+
 Uses `longitudinal_field` (an `AngularSpectrum` z-sweep sliced on axis) and
 `plot_longitudinal`.
 
@@ -43,16 +48,31 @@ def main() -> None:
     zs = np.linspace(0.55 * FOCAL_LENGTH, 1.45 * FOCAL_LENGTH, N_PLANES)
     section = longitudinal_field(U0, WAVELENGTH, zs, axis="x", pad_factor=1)
 
+    # Zoom onto the waist itself with a decoupled fine transverse line: the
+    # Airy radius here is ~24 µm — only a few input pixels at dx ≈ 3.9 µm.
+    airy_radius = 0.61 * WAVELENGTH * FOCAL_LENGTH / APERTURE_R
+    zw = np.linspace(0.94 * FOCAL_LENGTH, 1.06 * FOCAL_LENGTH, 140)
+    waist = longitudinal_field(
+        U0, WAVELENGTH, zw, axis="x", pad_factor=1,
+        output_half_width=5.0 * airy_radius, output_samples=401,
+    )
+
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(11, 4.2), constrained_layout=True)
+    fig, ax = plt.subplots(2, 1, figsize=(11, 8.2), constrained_layout=True)
     plot_longitudinal(
-        ax, section, vmin=-3.0,
+        ax[0], section, vmin=-3.0,
         title=f"Lens focusing cone (f = {FOCAL_LENGTH} m, D = {2*APERTURE_R*1e3:.1f} mm)",
     )
-    ax.set_ylim(-0.35e-3, 0.35e-3)  # zoom onto the cone near the axis
-    ax.axvline(FOCAL_LENGTH, color="cyan", lw=0.8, ls="--", alpha=0.7)
-    ax.text(FOCAL_LENGTH, 0.30e-3, "  focus (z = f)", color="cyan", fontsize=9)
+    ax[0].set_ylim(-0.35e-3, 0.35e-3)  # zoom onto the cone near the axis
+    ax[0].axvline(FOCAL_LENGTH, color="cyan", lw=0.8, ls="--", alpha=0.7)
+    ax[0].text(FOCAL_LENGTH, 0.30e-3, "  focus (z = f)", color="cyan", fontsize=9)
+
+    plot_longitudinal(
+        ax[1], waist, vmin=-3.5,
+        title="The waist, resolved on a decoupled fine line (output_half_width)",
+    )
+    ax[1].axvline(FOCAL_LENGTH, color="cyan", lw=0.8, ls="--", alpha=0.7)
     plt.show()
 
 
