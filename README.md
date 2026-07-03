@@ -49,16 +49,18 @@ applied to a field (`FT2`, `IFT2`), not methods on it.
   broadband field wavelength-by-wavelength onto a shared output grid and
   composites the result to an sRGB image through the CIE 1931 color-matching
   functions (analytic Wyman fit — no data file), with D65 / blackbody
-  illuminants. `wavelength_to_rgb`, `spectrum_to_srgb`, `plot_rgb`.
+  illuminants and display controls (`saturation`, `stretch`, `brightness`) for
+  vivid renders. `wavelength_to_rgb`, `spectrum_to_srgb`, `plot_rgb`.
 - **Gratings** (`diffraction.gratings`) — amplitude (`ronchi_grating`,
   `sinusoidal_amplitude_grating`), 2D `cross_grating`, and chromatic
   `phase_grating` (sinusoidal / binary / blazed sawtooth). Orders land at
   `x_m = m λ z / d`.
 - **Apertures** (`diffraction.apertures`) — circular, rectangular, square,
-  annular, elliptical and slit masks, all with adjustable centers; a
-  `lattice_aperture` that tiles any of them on a square or hexagonal lattice
-  (hole arrays); and an `antialiased` wrapper that evaluates any mask with
-  area-coverage (grey) edge pixels.
+  annular, elliptical and slit masks, regular-polygon (`polygon_aperture`,
+  e.g. a hexagon) and multi-slit (`nslit_aperture`, e.g. Young's double slit),
+  all with adjustable centers; a `lattice_aperture` that tiles any of them on a
+  square or hexagonal lattice (hole arrays); and an `antialiased` wrapper that
+  evaluates any mask with area-coverage (grey) edge pixels.
 - **Surfaces & lenses** (`diffraction.surfaces`) — `ParabolicSurface` and the
   stigmatic Cartesian-oval `CartesianSurface` (sag profile + thin-element
   `phase_mask`), plus an ideal `thin_lens` phase element that forms a field's
@@ -197,6 +199,9 @@ Runnable scripts live in [`examples/`](examples):
 | `diffraction_grating.py` | Monochromatic Ronchi grating far-field orders, positions verified against `m λ z / d` |
 | `white_light_grating.py` | White light dispersed into a spectrum by a grating (the polychromatic + grating showcase) |
 | `lattice_lens_diffraction.py` | Hexagonal hole array at a lens focal plane → reciprocal-lattice spots, plus a white-light version with each order dispersed |
+| `hexagon_polychromatic.py` | Hexagonal aperture in white light — a faithful reproduction of diffractsim's flagship colored hexagonal Fresnel pattern |
+| `double_slit_white_light.py` | Young's double slit and an N-slit grating in white light → colored fringes |
+| `hexagon_lens_star.py` | White-light hexagon at a lens focus → a six-pointed colored star (iris starburst) |
 
 ```bash
 python examples/simple_fresnel_diffraction.py

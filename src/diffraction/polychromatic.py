@@ -50,6 +50,9 @@ def propagate_polychromatic(
     output_half_width: Optional[float] = None,
     output_samples: int = 512,
     gamut: str = "desaturate",
+    saturation: float = 1.0,
+    stretch: float = 1.0,
+    brightness: float = 1.0,
     pad_factor: int = 2,
 ) -> Tuple[Array, Grid]:
     """Propagate a broadband field and render it as an sRGB image.
@@ -124,5 +127,8 @@ def propagate_polychromatic(
         stack,
         weights=None if weights is None else np.asarray(weights, dtype=float),
         gamut=gamut,
+        saturation=saturation,
+        stretch=stretch,
+        brightness=brightness,
     )
     return rgb, out_grid

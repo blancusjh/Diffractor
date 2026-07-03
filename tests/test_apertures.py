@@ -9,6 +9,8 @@ from diffraction import (
     lattice_aperture,
     lattice_sites,
     make_grid,
+    nslit_aperture,
+    polygon_aperture,
     rectangular_aperture,
     slit_aperture,
     square_aperture,
@@ -131,3 +133,82 @@ def test_lattice_aperture_composes_with_antialiased():
     field = antialiased(lattice_aperture, GRID, circular_aperture, 0.4, size=(2, 2), R=0.05)
     assert isinstance(field, Field)
     assert np.all((field.values.real >= 0.0) & (field.values.real <= 1.0))
+
+
+def test_polygon_aperture_hexagon_area():
+    R = 0.4
+    mask = polygon_aperture(X, Y, 6, R)
+    area = mask.sum() * DX * DX
+    np.testing.assert_allclose(area, 1.5 * np.sqrt(3) * R**2, rtol=5e-3)  # (3√3/2)R²
+
+
+def test_polygon_aperture_square_and_origin_inside():
+    # n_sides=4 is a square with apothem R·cos(45°); side = 2·apothem.
+    R = 0.5
+    mask = polygon_aperture(X, Y, 4, R)
+    side = 2 * R * np.cos(np.pi / 4)
+    np.testing.assert_allclose(mask.sum() * DX * DX, side**2, rtol=2e-2)
+    # the origin is always inside a centered polygon
+    assert bool(polygon_aperture(np.array(0.0), np.array(0.0), 6, R))
+
+
+def test_polygon_aperture_rotation_shifts_vertex():
+    # With rotation=0 an edge normal points along +x, so +x reaches only the
+    # apothem; rotating by π/6 puts a vertex on +x, reaching to R. A point
+    # between apothem and R on +x is therefore outside at rotation=0 and
+    # inside at rotation=π/6.
+    R = 0.5
+    apo = R * np.cos(np.pi / 6)
+    p = 0.5 * (apo + R)  # between apothem and circumradius, on +x
+    x = np.array(p)
+    y = np.array(0.0)
+    assert not bool(polygon_aperture(x, y, 6, R, rotation=0.0))  # past an edge
+    assert bool(polygon_aperture(x, y, 6, R, rotation=np.pi / 6))  # inside near a vertex
+
+
+def test_polygon_aperture_validation():
+    with pytest.raises(ValueError):
+        polygon_aperture(X, Y, 2, 0.5)
+    with pytest.raises(ValueError):
+        polygon_aperture(X, Y, 6, -0.1)
+
+
+def test_nslit_aperture_geometry():
+    slits = nslit_aperture(X, Y, 3, 0.05, 0.4)
+    # three slits, each of width ~0.05 along x, infinite in y
+    row = slits[128]  # a horizontal cut
+    # transmitting fraction of the row ~ n_slits · width / domain
+    frac = row.mean()
+    np.testing.assert_allclose(frac, 3 * 0.05 / 2.0, atol=1e-2)
+    # centered: symmetric slit centers about 0
+    centers = X[128][row]
+    np.testing.assert_allclose(centers.mean(), 0.0, atol=DX)
+
+
+def test_nslit_aperture_double_slit_fringe_spacing():
+    from diffraction import Field, fresnel_zoom_propagator
+
+    L, N, wavelength, z, d, w = 6e-3, 1024, 550e-9, 1.0, 0.2e-3, 0.03e-3
+    grid = make_grid(N, L)
+    x, y = grid
+    mask = nslit_aperture(x, y, 2, w, d) * square_aperture(x, y, 1.5e-3)
+    U0 = Field(grid, mask.astype(complex))
+    fringe = wavelength * z / d
+    out = fresnel_zoom_propagator(
+        U0, z=z, wavelength=wavelength, output_half_width=5 * fringe, output_samples=2048
+    )
+    row = np.abs(out.values[1024]) ** 2
+    xo = out.grid.x[0, :]
+    # peak nearest the first fringe should sit at ≈ λ z / d
+    near = np.abs(xo - fringe) < 0.4 * fringe
+    peak = xo[near][np.argmax(row[near])]
+    np.testing.assert_allclose(peak, fringe, rtol=5e-2)
+
+
+def test_nslit_aperture_validation():
+    with pytest.raises(ValueError):
+        nslit_aperture(X, Y, 0, 0.05, 0.4)
+    with pytest.raises(ValueError):
+        nslit_aperture(X, Y, 2, -0.05, 0.4)
+    with pytest.raises(ValueError):
+        nslit_aperture(X, Y, 2, 0.05, 0.4, orientation="diagonal")

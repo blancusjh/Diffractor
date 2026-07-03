@@ -47,6 +47,9 @@ def main() -> None:
         weights=weights,
         output_half_width=SCREEN_HALF,
         output_samples=512,
+        gamut="clip",
+        stretch=0.6,
+        saturation=1.4,
     )
 
     import matplotlib.pyplot as plt
