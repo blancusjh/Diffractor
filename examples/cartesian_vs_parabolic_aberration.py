@@ -22,11 +22,14 @@ scenario.
 
 **Figure 1 (images):**
 
-* **Edge-on system caustics** (top): |U(x, z)|^2 across the whole system for each
-  surface, on a *shared* oval-peak scale — the curved refractor drawn at left,
-  then the converging cone, the focus, and the field diverging beyond it. The
-  oval pinches to a bright diffraction-limited waist at the design plane and
-  reopens symmetrically; the parabola cone crosses into a wide flared caustic.
+* **Edge-on system caustics** (top): |U(x, z)|^2 of the *whole* system on one
+  shared oval-peak log scale — the incident beam arriving from the left, the
+  refracting surface (white), the converging cone, the focus, and the field
+  diverging beyond it, one continuous propagation. The oval pinches to a
+  diffraction-limited waist at the design plane and reopens symmetrically; the
+  parabola smears into a flared spherical-aberration caustic. Planes cut close
+  behind the curved surface make the integrand highly oscillatory, so the
+  per-plane integration grid is refined adaptively to stay Nyquist-sampled.
 * **Focal-spot images** (bottom): the 2-D PSF at the design plane (oval Airy
   disc vs parabola halo) and the parabola at its best on-axis plane.
 
@@ -161,20 +164,47 @@ def main() -> None:
         c = np.cumsum(P * r_out)
         return c / c[-1]
 
-    # --- Full-system longitudinal maps (surface -> focus), surfaces overlaid ---
-    z_start = 1.4 * max(z_o.max(), z_p.max())  # begin just past the surface
-    zc = np.linspace(z_start, 1.5 * ZI, 200)  # through the focus and well beyond
-    rc = np.linspace(0.0, R, 220)
+    # --- Full-system longitudinal maps: beam -> surface -> cone -> focus -> beyond
+    # One continuous propagation on a single z axis. Before the surface the field
+    # is the incident wave from the source; from just past the surface on it is
+    # the Huygens integral. The J0 reduction absorbs the 2π azimuthal factor, so
+    # the physical field is U = K2 · integral / i and the incident wave in the
+    # integral's units is 1/(K2 d1)² — the two regions then join seamlessly on
+    # the shared oval-peak scale (checked against the geometric (R/w)² flux law).
+    sag_max = max(z_o.max(), z_p.max())
+    z_join = 1.15 * sag_max  # first plane the surface integral can populate
+    zc = np.linspace(-0.15 * ZI, 1.5 * ZI, 216)
+    rc = np.linspace(0.0, R, 260)
     tc = np.concatenate([-rc[::-1], rc[1:]])  # mirror to a symmetric x axis
 
-    def system_caustic(z_s):
-        rows = [np.abs(huygens_field(z_s, r, z, rc)) ** 2 for z in zc]
-        prof = np.asarray(rows)  # (n_z, n_r)
-        full = np.concatenate([prof[:, ::-1], prof[:, 1:]], axis=1)  # (n_z, n_t)
+    # Planes cut close behind the surface make the integrand oscillate far faster
+    # than at the focus; subsample a fine master grid per plane (Nyquist-driven)
+    # instead of paying the finest grid everywhere.
+    N_MASTER, N_BASE, Z_REF = 45000, 4500, 8e-3
+    r_m = np.linspace(0.0, R, N_MASTER)
+    zeros_m = np.zeros_like(r_m)
+    sag_master = {"oval": oval.sag(r_m, zeros_m), "parab": parab.sag(r_m, zeros_m)}
+
+    def system_caustic(which):
+        sag = sag_master[which]
+        rows = np.empty((zc.size, rc.size))
+        for i, z in enumerate(zc):
+            if z <= z_join:
+                d1 = np.sqrt((z - ZO) ** 2 + rc**2)  # incident wave, medium 1
+                rows[i] = 1.0 / (K2 * d1) ** 2
+            else:
+                boost = abs(1.0 / z - 1.0 / ZI) / abs(1.0 / Z_REF - 1.0 / ZI)
+                k = max(1, int(N_MASTER // (N_BASE * min(max(boost, 1.0), 10.0))))
+                rows[i] = np.abs(huygens_field(sag[::k], r_m[::k], z, rc)) ** 2
+        full = np.concatenate([rows[:, ::-1], rows[:, 1:]], axis=1)  # (n_z, n_t)
         return LongitudinalSection(intensity=full / I0, z=zc, t=tc, axis="x")
 
-    sec_o = system_caustic(z_o)
-    sec_p = system_caustic(z_p)
+    sec_o = system_caustic("oval")
+    sec_p = system_caustic("parab")
+    # Log floor just under the incident-beam level so the whole propagation shows.
+    inc_level = np.log10(1.0 / ((K2 * ZO) ** 2 * I0))
+    v_lo = inc_level - 0.7
+    print(f"incident beam sits at {inc_level:.1f} dex of the oval focal peak")
 
     # --- 2-D focal-spot images (shared scale) --------------------------------
     spot_half = r_out.max()
@@ -197,16 +227,17 @@ def main() -> None:
     # ======================= Figure 1 — images ===============================
     fig1, ax1 = plt.subplots(2, 3, figsize=(15, 8.6), constrained_layout=True)
 
-    im_c = plot_longitudinal(ax1[0, 0], sec_o, normalize=False, vmin=-6.5,
-                             title="Oval — system caustic (surface → focus)")
-    plot_longitudinal(ax1[0, 1], sec_p, normalize=False, vmin=-6.5,
-                      title="Parabola — system caustic (surface → focus)")
+    im_c = plot_longitudinal(ax1[0, 0], sec_o, normalize=False, vmin=v_lo,
+                             title="Oval — beam, surface, cone, focus")
+    plot_longitudinal(ax1[0, 1], sec_p, normalize=False, vmin=v_lo,
+                      title="Parabola — beam, surface, cone, caustic")
     for a, zsag in ((ax1[0, 0], z_o), (ax1[0, 1], z_p)):
-        a.set_facecolor("black")  # blend the pre-surface region with the map
         a.plot(zsag, r, color="white", lw=1.1)   # the refracting surface, drawn
         a.plot(zsag, -r, color="white", lw=1.1)  # in the same x–z axes
-        a.set_xlim(0.0, zc.max())
+        a.set_xlim(zc.min(), zc.max())
         a.axvline(ZI, color="cyan", ls="--", lw=0.8, alpha=0.8)
+        a.text(zc.min() + 0.2e-3, 0.87 * R, "n₁", color="white", fontsize=9)
+        a.text(z_join + 0.5e-3, 0.87 * R, "n₂", color="white", fontsize=9)
     ax1[0, 1].axvline(z_best, color="w", ls=":", lw=0.8, alpha=0.6)
 
     ax1[0, 2].axis("off")
