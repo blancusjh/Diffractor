@@ -24,6 +24,8 @@ __all__ = [
     "antialiased",
     "circular_aperture",
     "elliptical_aperture",
+    "lattice_aperture",
+    "lattice_sites",
     "rectangular_aperture",
     "slit_aperture",
     "square_aperture",
@@ -123,3 +125,96 @@ def slit_aperture(
     if orientation == "y":
         return np.abs(x - x0) <= h
     raise ValueError("orientation must be 'x' or 'y'.")
+
+
+def lattice_sites(
+    spacing: float,
+    *,
+    lattice: str = "square",
+    size: Tuple[int, int] = (5, 5),
+    center: Center = (0.0, 0.0),
+) -> np.ndarray:
+    """Centered Bravais-lattice site coordinates.
+
+    Parameters
+    ----------
+    spacing : float
+        Nearest-neighbor spacing ``a`` [m].
+    lattice : {"square", "hexagonal"}
+        Lattice type. ``"hexagonal"`` uses row height ``a√3/2`` with alternate
+        rows offset by ``a/2``.
+    size : (nx, ny)
+        Number of sites along each axis.
+    center : (x0, y0)
+        Center of the whole lattice.
+
+    Returns
+    -------
+    array (M, 2)
+        Site ``(x, y)`` coordinates, centered on ``center``.
+    """
+    if spacing <= 0:
+        raise ValueError("spacing must be positive.")
+    nx, ny = size
+    if nx < 1 or ny < 1:
+        raise ValueError("size entries must be >= 1.")
+    x0, y0 = center
+    ix = np.arange(nx) - (nx - 1) / 2.0
+    iy = np.arange(ny) - (ny - 1) / 2.0
+
+    sites = []
+    if lattice == "square":
+        for j in iy:
+            for i in ix:
+                sites.append((x0 + i * spacing, y0 + j * spacing))
+    elif lattice == "hexagonal":
+        row_h = spacing * np.sqrt(3.0) / 2.0
+        for row, j in enumerate(iy):
+            offset = 0.5 * spacing if (row % 2) else 0.0
+            for i in ix:
+                sites.append((x0 + i * spacing + offset, y0 + j * row_h))
+    else:
+        raise ValueError("lattice must be 'square' or 'hexagonal'.")
+    return np.asarray(sites)
+
+
+def lattice_aperture(
+    x: Array,
+    y: Array,
+    base: Callable[..., Array],
+    spacing: float,
+    *,
+    lattice: str = "square",
+    size: Tuple[int, int] = (5, 5),
+    center: Center = (0.0, 0.0),
+    **base_kwargs,
+) -> Array:
+    """A lattice of sub-apertures: ``base`` stamped at each lattice site.
+
+    The union (logical OR) of a base aperture placed on a square or hexagonal
+    lattice — a hole array, whose far field is the reciprocal lattice of spots
+    modulated by the single-aperture form factor.
+
+    Parameters
+    ----------
+    base : callable
+        A mask kernel ``base(x, y, *, center=..., **base_kwargs) -> Array``
+        (e.g. :func:`circular_aperture`; pass its size as a keyword such as
+        ``R=...``).
+    spacing : float
+        Lattice spacing ``a`` [m].
+    lattice, size, center :
+        Passed to :func:`lattice_sites`.
+    **base_kwargs :
+        Extra keyword arguments forwarded to ``base`` (e.g. ``R``).
+
+    Returns
+    -------
+    2D float array
+        Transmission mask in ``{0, 1}`` (wrap with :func:`antialiased` for grey
+        edges).
+    """
+    mask = np.zeros(np.broadcast(x, y).shape, dtype=float)
+    for cx, cy in lattice_sites(spacing, lattice=lattice, size=size, center=center):
+        mask = np.maximum(mask, np.asarray(base(x, y, center=(cx, cy), **base_kwargs), dtype=float))
+    return mask

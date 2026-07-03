@@ -27,6 +27,8 @@ from .apertures import (
     antialiased,
     circular_aperture,
     elliptical_aperture,
+    lattice_aperture,
+    lattice_sites,
     rectangular_aperture,
     slit_aperture,
     square_aperture,
@@ -67,7 +69,13 @@ from .sampling import (
     next_fft_size,
     recommend_grid_convergence,
 )
-from .surfaces import CartesianSurface, ParabolicSurface, Surface, thin_element_phase
+from .surfaces import (
+    CartesianSurface,
+    ParabolicSurface,
+    Surface,
+    thin_element_phase,
+    thin_lens,
+)
 from .viz import animate, plot_scalar_field, plot_scalar_field_3d
 
 __version__ = "0.5.0"
@@ -108,6 +116,8 @@ __all__ = [
     "gaussian_beam",
     "grid_spacing",
     "intensity",
+    "lattice_aperture",
+    "lattice_sites",
     "make_grid",
     "marechal_strehl",
     "next_fft_size",
@@ -129,6 +139,7 @@ __all__ = [
     "square_aperture",
     "synthesize_zernikes",
     "thin_element_phase",
+    "thin_lens",
     "to_device",
     "wavelength_to_rgb",
     "xyz_to_srgb",
