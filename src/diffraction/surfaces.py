@@ -23,7 +23,13 @@ import numpy as np
 from .field import Field
 from .grids import Array, Grid
 
-__all__ = ["CartesianSurface", "ParabolicSurface", "Surface", "thin_element_phase"]
+__all__ = [
+    "CartesianSurface",
+    "ParabolicSurface",
+    "Surface",
+    "thin_element_phase",
+    "thin_lens",
+]
 
 
 def thin_element_phase(sag: Array, wavelength: float, n1: float, n2: float) -> Array:
@@ -36,6 +42,34 @@ def thin_element_phase(sag: Array, wavelength: float, n1: float, n2: float) -> A
         raise ValueError("wavelength must be positive.")
     k0 = 2.0 * np.pi / wavelength
     return np.exp(1.0j * k0 * (n1 - n2) * sag)
+
+
+def thin_lens(grid: Grid, focal_length: float, wavelength: float, *, n: float = 1.0) -> Field:
+    """Ideal thin-lens phase ``exp(-i k r² / (2 f))`` as a :class:`Field`.
+
+    A converging lens (``focal_length > 0``) imprints a converging quadratic
+    phase; propagating a field through it and on to ``z = focal_length`` forms
+    the field's Fraunhofer pattern at the back focal plane, scaled by ``λ f``.
+    Multiply it onto a source field on the same grid.
+
+    Parameters
+    ----------
+    grid : Grid
+        Spatial grid.
+    focal_length : float
+        Focal length ``f`` [m], non-zero (negative for a diverging lens).
+    wavelength : float
+        Vacuum wavelength [m].
+    n : float
+        Refractive index of the medium the lens sits in.
+    """
+    if wavelength <= 0:
+        raise ValueError("wavelength must be positive.")
+    if focal_length == 0:
+        raise ValueError("focal_length must be non-zero.")
+    x, y = grid
+    k = 2.0 * np.pi * n / wavelength
+    return Field(grid, np.exp(-1.0j * k * (x**2 + y**2) / (2.0 * focal_length)))
 
 
 class Surface(ABC):

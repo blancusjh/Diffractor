@@ -1,7 +1,16 @@
 import numpy as np
 import pytest
 
-from diffraction import CartesianSurface, ParabolicSurface, make_grid, thin_element_phase
+from diffraction import (
+    CartesianSurface,
+    Field,
+    ParabolicSurface,
+    circular_aperture,
+    fresnel_zoom_propagator,
+    make_grid,
+    thin_element_phase,
+    thin_lens,
+)
 
 
 def test_parabolic_sag():
@@ -112,3 +121,37 @@ def test_surface_phase_mask_matches_thin_element_phase():
     x, y = grid
     expected = thin_element_phase(surface.sag(x, y), 500e-9, 1.0, 1.5)
     np.testing.assert_allclose(surface.phase_mask(grid, 500e-9, 1.0, 1.5).values, expected)
+
+
+def test_thin_lens_unit_modulus_and_validation():
+    grid = make_grid(64, 1e-3)
+    lens = thin_lens(grid, focal_length=0.1, wavelength=500e-9)
+    np.testing.assert_allclose(np.abs(lens.values), 1.0, atol=1e-12)
+    with pytest.raises(ValueError):
+        thin_lens(grid, focal_length=0.0, wavelength=500e-9)
+    with pytest.raises(ValueError):
+        thin_lens(grid, focal_length=0.1, wavelength=-1.0)
+
+
+def test_thin_lens_focuses_aperture_to_airy():
+    # A lens forms the Fraunhofer (Airy) pattern at its back focal plane;
+    # first dark ring at 1.22 λ f / D.
+    L, N, wavelength, f, R = 6e-3, 1024, 550e-9, 0.15, 0.6e-3
+    grid = make_grid(N, L)
+    x, y = grid
+    U0 = Field(grid, circular_aperture(x, y, R).astype(complex)) * thin_lens(grid, f, wavelength)
+    airy = 1.22 * wavelength * f / (2 * R)
+    out = fresnel_zoom_propagator(
+        U0, z=f, wavelength=wavelength, output_half_width=6 * airy, output_samples=1024
+    )
+    row = np.abs(out.values[512:, 512]) ** 2  # radial profile from center
+    r = out.grid.y[512:, 512]
+    first_min = next(
+        i for i in range(1, len(row) - 1)
+        if row[i] < row[i - 1] and row[i] < row[i + 1] and row[i] < 0.05 * row.max()
+    )
+    np.testing.assert_allclose(r[first_min], airy, rtol=3e-2)
+    # the focus sits on axis (peak within a pixel of the window center)
+    peak = np.unravel_index(np.argmax(np.abs(out.values) ** 2), out.shape)
+    assert abs(peak[0] - out.shape[0] // 2) <= 1
+    assert abs(peak[1] - out.shape[1] // 2) <= 1

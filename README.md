@@ -55,12 +55,14 @@ applied to a field (`FT2`, `IFT2`), not methods on it.
   `phase_grating` (sinusoidal / binary / blazed sawtooth). Orders land at
   `x_m = m λ z / d`.
 - **Apertures** (`diffraction.apertures`) — circular, rectangular, square,
-  annular, elliptical and slit masks, all with adjustable centers, plus an
-  `antialiased` wrapper that evaluates any mask with area-coverage (grey)
-  edge pixels.
-- **Surfaces** (`diffraction.surfaces`) — `ParabolicSurface` and the
-  stigmatic Cartesian-oval `CartesianSurface`, each providing a sag profile
-  and a thin-element `phase_mask`.
+  annular, elliptical and slit masks, all with adjustable centers; a
+  `lattice_aperture` that tiles any of them on a square or hexagonal lattice
+  (hole arrays); and an `antialiased` wrapper that evaluates any mask with
+  area-coverage (grey) edge pixels.
+- **Surfaces & lenses** (`diffraction.surfaces`) — `ParabolicSurface` and the
+  stigmatic Cartesian-oval `CartesianSurface` (sag profile + thin-element
+  `phase_mask`), plus an ideal `thin_lens` phase element that forms a field's
+  Fraunhofer pattern at its back focal plane.
 - **Sources** (`diffraction.fields`) — Gaussian beams and (tilted) plane waves.
 - **Aberrations** (`diffraction.aberrations`) — Noll-indexed, RMS-normalized
   Zernike polynomials, least-squares wavefront fitting (`fit_zernikes`),
@@ -194,6 +196,7 @@ Runnable scripts live in [`examples/`](examples):
 | `polychromatic_aperture.py` | White-light (D65) circular aperture → chromatic diffraction rings |
 | `diffraction_grating.py` | Monochromatic Ronchi grating far-field orders, positions verified against `m λ z / d` |
 | `white_light_grating.py` | White light dispersed into a spectrum by a grating (the polychromatic + grating showcase) |
+| `lattice_lens_diffraction.py` | Hexagonal hole array at a lens focal plane → reciprocal-lattice spots, plus a white-light version with each order dispersed |
 
 ```bash
 python examples/simple_fresnel_diffraction.py
