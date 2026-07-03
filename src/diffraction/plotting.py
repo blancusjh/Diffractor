@@ -42,8 +42,8 @@ def plot_intensity(
     field : Field
         Field to display (its grid supplies the plot extent).
     grid : Grid, optional
-        Deprecated / optional override of the extent grid; defaults to
-        ``field.grid``.
+        Override of the extent grid (e.g. to plot in scaled units); defaults
+        to ``field.grid``.
     log : bool
         If True (default), show ``log10`` of the normalized intensity
         clipped to ``[vmin, vmax]`` decades. The default 6-decade range

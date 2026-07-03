@@ -78,8 +78,9 @@ applied to a field (`FT2`, `IFT2`), not methods on it.
   Zernike polynomials, least-squares wavefront fitting (`fit_zernikes`),
   synthesis, PV/RMS metrics and the Maréchal Strehl estimate.
 - **Backends** (`diffraction.backend`) — CPU/GPU array-module resolution
-  (`array_module`, `asnumpy`, `to_device`) so the numerical core runs
-  unchanged on NumPy or CuPy.
+  (`array_module`, `asnumpy`, `to_device`). The GPU path is `AngularSpectrum`
+  (plus the `FFT2`/`IFFT2` operators), which runs unchanged on NumPy or CuPy;
+  the one-shot functional propagators are NumPy-first.
 - **Longitudinal fields** (`diffraction.longitudinal`) — `longitudinal_field`
   sweeps a field through a range of distances and slices a transverse line at
   each plane to build an `x–z` (or `y–z`) cross-section — a lens's focusing

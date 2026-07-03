@@ -36,7 +36,7 @@ from .apertures import (
     square_aperture,
 )
 from .asm import AngularSpectrum
-from .backend import CUPY_AVAILABLE, array_module, asnumpy, to_device
+from .backend import CUPY_AVAILABLE, array_module, asnumpy, resolve_module, to_device
 from .colorimetry import (
     blackbody_weights,
     cie_xyz,
@@ -142,6 +142,7 @@ __all__ = [
     "pv",
     "recommend_grid_convergence",
     "rectangular_aperture",
+    "resolve_module",
     "rms",
     "ronchi_grating",
     "sinusoidal_amplitude_grating",

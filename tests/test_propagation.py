@@ -209,3 +209,26 @@ class TestFraunhofer:
         first_min = np.argmax((profile[1:-1] < profile[:-2]) & (profile[1:-1] < profile[2:])) + 1
         expected = 1.22 * wavelength * z / D
         np.testing.assert_allclose(r[first_min], expected, rtol=2e-2)
+
+
+def test_single_fft_fresnel_rejects_nonpositive_z():
+    import numpy as np
+    import pytest
+    from diffraction import (
+        antialiased,
+        circular_aperture,
+        fraunhofer_propagator,
+        fresnel_output_grid,
+        fresnel_propagator,
+        make_grid,
+    )
+
+    grid = make_grid(64, 2e-3)
+    U0 = antialiased(circular_aperture, grid, 0.5e-3)
+    for z in (0.0, -0.1):
+        with pytest.raises(ValueError):
+            fresnel_output_grid(grid, z, 532e-9)
+        with pytest.raises(ValueError):
+            fresnel_propagator(U0, z=z, wavelength=532e-9)
+        with pytest.raises(ValueError):
+            fraunhofer_propagator(U0, z=z, wavelength=532e-9)

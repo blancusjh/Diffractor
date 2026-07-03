@@ -105,3 +105,14 @@ def test_zernike_name():
     assert zernike_name(4) == "defocus"
     assert zernike_name(11) == "primary spherical"
     assert zernike_name(33) == "Z33"
+
+
+def test_fit_zernikes_rejects_complex_field():
+    import numpy as np
+    import pytest
+    from diffraction import Field, fit_zernikes, make_grid
+
+    grid = make_grid(64, 2e-3)
+    complex_field = Field(grid, np.exp(1j * grid.x / 1e-3))
+    with pytest.raises(TypeError):
+        fit_zernikes(complex_field, radius=0.8e-3, jmax=4)
