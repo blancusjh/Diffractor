@@ -18,6 +18,53 @@ surface phase → propagator → plot). Coordinate queries live on the grid
 (`field.grid.x`, `field.grid.spacing`) and Fourier transforms are *operators*
 applied to a field (`FT2`, `IFT2`), not methods on it.
 
+## Gallery
+
+A tour of what the toolkit renders, organized by feature area. Every image
+below is produced by a runnable script in [`examples/`](examples) — click
+through to reproduce it.
+
+### Basic diffraction
+
+|  |
+| --- |
+| ![Circular aperture: input intensity and its angular-spectrum-propagated Fresnel diffraction pattern.](docs/images/basic_asm_diffraction.png) |
+| A circular aperture, propagated with the angular-spectrum method — [`simple_asm_diffraction.py`](examples/simple_asm_diffraction.py) (see also [`simple_fresnel_diffraction.py`](examples/simple_fresnel_diffraction.py) for the single-FFT Fresnel method). |
+
+### Polychromatic (white-light) rendering
+
+|  |  |
+| --- | --- |
+| ![A hexagonal aperture in D65 white light: the iconic colored hexagonal Fresnel diffraction pattern with six star spikes.](docs/images/polychromatic_hexagon.png) | ![Young's double slit and a five-slit grating in white light, showing colored interference fringes.](docs/images/polychromatic_double_slit.png) |
+| Hexagonal aperture in D65 white light — [`hexagon_polychromatic.py`](examples/hexagon_polychromatic.py) | Double- and five-slit white-light interference — [`double_slit_white_light.py`](examples/double_slit_white_light.py) |
+
+![Animated: a square diffraction grating imaged by a real refracting singlet in white light, sweeping through focus.](examples/oval_grating_animation.gif)
+
+*Animated — a square grating imaged by a real refracting singlet (`CartesianSurface`,
+not the idealized `thin_lens`) in white light, sweeping the screen through focus:
+[`oval_grating_polychromatic_animation.py`](examples/oval_grating_polychromatic_animation.py).*
+
+### Longitudinal (edge-on) fields
+
+|  |  |
+| --- | --- |
+| ![A lens's focusing cone seen edge-on: converging cone, focal waist, diverging cone, plus a zoom on the waist showing Airy-scale structure.](docs/images/longitudinal_monochromatic.png) | ![The same focusing cone in white light, composited to true color: colored fringing from each wavelength's own diffraction scale.](docs/images/longitudinal_polychromatic.png) |
+| Monochromatic focusing cone, edge-on — [`lens_longitudinal_focus.py`](examples/lens_longitudinal_focus.py) | The same cone in white light — [`lens_longitudinal_polychromatic.py`](examples/lens_longitudinal_polychromatic.py) |
+
+### Aberration: stigmatic oval vs. paraboloid
+
+The [flagship comparison](#diffraction) at the top of this page shows a single
+very-high-NA case; swept across three apertures, it shows spherical
+aberration *emerging* as the aperture opens:
+
+![The oval-vs-paraboloid system caustic at three apertures (low, medium, very high NA): the oval stays sharp throughout while the paraboloid's spherical aberration grows from negligible to a wide, badly shifted caustic.](docs/images/oval_vs_parabola_3_apertures.png)
+
+*Low → medium → very-high NA (top → bottom): the exact oval focuses to a
+diffraction-limited point at every aperture; the paraboloid — same vertex
+curvature — degrades from imperceptible (0.1 waves) to a destroyed image
+(96.5 waves) —
+[`oval_vs_parabola_apertures.py`](examples/oval_vs_parabola_apertures.py).*
+
 ## Features
 
 - **Field & Grid** (`diffraction.field`, `diffraction.grids`) — `Field`
@@ -222,7 +269,10 @@ Runnable scripts live in [`examples/`](examples):
 | `cross_grating_lens.py` | Square (cross) grating at a lens focus → a centered lattice of orders at `(m λ f / d, n λ f / d)`, monochromatic and white-light (each order dispersed) |
 | `polar_grating_lens.py` | Polar grating (rings × spokes) at a lens focus → a centered polar lattice of orders; the white-light ring orders disperse radially (blue in, red out) |
 | `lens_longitudinal_focus.py` | The focusing cone of a lens seen edge-on (`longitudinal_field`) — converging cone, focal waist at `z = f`, diverging cone |
+| `lens_longitudinal_polychromatic.py` | The same focusing cone in white light (`propagate_polychromatic_longitudinal`) — a true-color edge-on cross-section, colored fringing from each wavelength's own Airy scale |
 | `grating_talbot_carpet.py` | A grating's Talbot carpet — the `x–z` longitudinal near field showing self-images at `z_T = 2 d²/λ` and fractional revivals between |
+| `oval_grating_polychromatic_animation.py` | A square grating imaged by a real refracting singlet (`CartesianSurface`, not the idealized `thin_lens`) — an animated white-light GIF sweeping the screen through focus |
+| `oval_vs_parabola_apertures.py` | The oval-vs-paraboloid system caustic at three apertures (low / medium / very high NA) — spherical aberration emerging as the aperture opens, oval sharp throughout |
 
 ```bash
 python examples/simple_fresnel_diffraction.py

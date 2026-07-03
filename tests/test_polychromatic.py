@@ -103,3 +103,53 @@ def test_asm_callable_with_fresh_grid_matches_constant_field():
     rgb_callable, g2 = propagate_polychromatic(field_of, wl, z=0.02, propagator="asm")
     np.testing.assert_allclose(rgb_callable, rgb_field, atol=1e-12)
     np.testing.assert_allclose(g2.x, g1.x)
+
+
+def test_longitudinal_returns_rgb_section():
+    from diffraction import propagate_polychromatic_longitudinal
+
+    U0 = _aperture()
+    wl = np.linspace(450e-9, 650e-9, 6)
+    zs = np.linspace(0.02, 0.05, 4)
+    sec = propagate_polychromatic_longitudinal(
+        U0, wl, zs, output_half_width=2e-4, output_samples=24
+    )
+    assert sec.rgb.shape == (4, 24, 3)
+    assert sec.z.shape == (4,)
+    assert sec.t.shape == (24,)
+    assert sec.axis == "x"
+    assert np.all((sec.rgb >= 0.0) & (sec.rgb <= 1.0))
+
+
+def test_longitudinal_single_wavelength_matches_its_color():
+    from diffraction import propagate_polychromatic_longitudinal, wavelength_to_rgb
+
+    U0 = _aperture()
+    sec = propagate_polychromatic_longitudinal(
+        U0, [550e-9], [0.03], output_half_width=2e-4, output_samples=32
+    )
+    flat = sec.rgb.reshape(-1, 3)
+    bright = flat[np.argmax(flat.sum(axis=1))]
+    expected = wavelength_to_rgb(550.0)
+    bn = bright / (bright.max() + 1e-12)
+    en = expected / (expected.max() + 1e-12)
+    np.testing.assert_allclose(bn, en, atol=0.1)
+
+
+def test_longitudinal_native_sampling_and_axis_y():
+    from diffraction import propagate_polychromatic_longitudinal
+
+    U0 = _aperture()
+    wl = np.linspace(500e-9, 600e-9, 4)
+    sec = propagate_polychromatic_longitudinal(U0, wl, [0.02, 0.03], axis="y")
+    assert sec.axis == "y"
+    assert sec.rgb.shape[0] == 2
+    assert sec.rgb.shape[1] == U0.grid.shape[0]
+
+
+def test_longitudinal_validation():
+    from diffraction import propagate_polychromatic_longitudinal
+
+    U0 = _aperture()
+    with pytest.raises(ValueError):
+        propagate_polychromatic_longitudinal(U0, [], [0.02])

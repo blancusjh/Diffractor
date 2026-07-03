@@ -9,8 +9,15 @@ import numpy as np
 from .field import Field
 from .grids import Array, Grid
 from .longitudinal import LongitudinalSection
+from .polychromatic import RGBLongitudinalSection
 
-__all__ = ["intensity", "plot_intensity", "plot_longitudinal", "plot_rgb"]
+__all__ = [
+    "intensity",
+    "plot_intensity",
+    "plot_longitudinal",
+    "plot_rgb",
+    "plot_rgb_longitudinal",
+]
 
 
 def intensity(U: Union[Field, Array], *, normalize: bool = True) -> Array:
@@ -114,6 +121,33 @@ def plot_longitudinal(
         cmap=cmap,
         vmin=vmin if log else None,
         vmax=vmax if log else None,
+        interpolation="antialiased",
+        interpolation_stage="rgba",
+    )
+    if title:
+        ax.set_title(title)
+    ax.set_xlabel("z [m]")
+    ax.set_ylabel(f"{section.axis} [m]")
+    return im
+
+
+def plot_rgb_longitudinal(
+    ax, section: RGBLongitudinalSection, *, title: Optional[str] = None
+):
+    """Draw an axial sRGB (``x–z``/``y–z``) cross-section.
+
+    Propagation distance ``z`` runs along the horizontal axis and the sliced
+    transverse coordinate along the vertical, matching :func:`plot_longitudinal`'s
+    layout — the polychromatic counterpart, for the
+    :class:`~diffraction.polychromatic.RGBLongitudinalSection` returned by
+    :func:`~diffraction.polychromatic.propagate_polychromatic_longitudinal`.
+    """
+    shown = np.clip(section.rgb, 0.0, 1.0).transpose(1, 0, 2)  # (n_t, n_z, 3)
+    im = ax.imshow(
+        shown,
+        extent=[section.z.min(), section.z.max(), section.t.min(), section.t.max()],
+        origin="lower",
+        aspect="auto",
         interpolation="antialiased",
         interpolation_stage="rgba",
     )
