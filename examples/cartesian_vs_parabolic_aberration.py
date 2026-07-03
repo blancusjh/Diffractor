@@ -173,7 +173,7 @@ def main() -> None:
     # the shared oval-peak scale (checked against the geometric (R/w)² flux law).
     sag_max = max(z_o.max(), z_p.max())
     z_join = 1.15 * sag_max  # first plane the surface integral can populate
-    zc = np.linspace(-0.15 * ZI, 2.0 * ZI, 216)
+    zc = np.linspace(-0.15 * ZI, 1.7 * ZI, 216)
     rc = np.linspace(0.0, R, 260)
     tc = np.concatenate([-rc[::-1], rc[1:]])  # mirror to a symmetric x axis
 

@@ -89,7 +89,7 @@ def render_row(oval, parab, O, R_target):
     # (see cartesian_vs_parabolic_aberration.py for the incident-wave-units note).
     sag_max = max(z_o.max(), z_p.max())
     z_join = 1.15 * sag_max
-    zc = np.linspace(-0.15 * ZI, 2.0 * ZI, 170)
+    zc = np.linspace(-0.15 * ZI, 1.7 * ZI, 170)
     rc = np.linspace(0.0, 1.05 * R, 170)
     tc = np.concatenate([-rc[::-1], rc[1:]])
 
