@@ -10,6 +10,7 @@ from diffraction import (
     ronchi_grating,
     sinusoidal_amplitude_grating,
     square_aperture,
+    thin_lens,
 )
 
 L, N = 4e-3, 1024
@@ -75,6 +76,27 @@ def test_blazed_grating_steers_into_one_order():
     total = sum(e.values())
     assert e[dominant] / total > 0.8  # most energy in that one order
     assert e[dominant] > 10 * e[-dominant]  # strongly asymmetric
+
+
+def test_grating_plus_lens_focuses_order_to_focal_plane():
+    # A grating + lens is a spectrometer: at the lens back focal plane, order m
+    # of wavelength WL lands at x_m = m WL f / d (same law as the far field with
+    # z -> f), but focused to a sharp spot instead of the broad Fresnel pattern.
+    f = 0.25
+    x_order = WL * f / D
+    ap = square_aperture(X, Y, 1e-3)
+    grating = Field(GRID, (ronchi_grating(X, Y, D, duty=0.5) * ap).astype(complex))
+    focused = grating * thin_lens(GRID, f, WL)
+    half, nout = 3.2 * x_order, 2048
+    out = fresnel_zoom_propagator(
+        focused, z=f, wavelength=WL, output_half_width=half, output_samples=nout
+    )
+    row = np.abs(out.values[nout // 2]) ** 2
+    xo = out.grid.x[0, :]
+    # the +1 order peaks at m WL f / d
+    near = np.abs(xo - x_order) < 0.5 * x_order
+    peak_x = xo[near][np.argmax(row[near])]
+    np.testing.assert_allclose(peak_x, x_order, rtol=2e-2)
 
 
 def test_cross_grating_is_separable_2d():

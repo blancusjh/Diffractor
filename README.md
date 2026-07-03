@@ -202,6 +202,7 @@ Runnable scripts live in [`examples/`](examples):
 | `hexagon_polychromatic.py` | Hexagonal aperture in white light — a faithful reproduction of diffractsim's flagship colored hexagonal Fresnel pattern |
 | `double_slit_white_light.py` | Young's double slit and an N-slit grating in white light → colored fringes |
 | `hexagon_lens_star.py` | White-light hexagon at a lens focus → a six-pointed colored star (iris starburst) |
+| `grating_spectrometer.py` | Grating + lens spectrometer — a Ronchi grating giving symmetric focused spectra vs. a blazed grating steering the energy into one order |
 
 ```bash
 python examples/simple_fresnel_diffraction.py
