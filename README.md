@@ -203,6 +203,7 @@ Runnable scripts live in [`examples/`](examples):
 | `double_slit_white_light.py` | Young's double slit and an N-slit grating in white light → colored fringes |
 | `hexagon_lens_star.py` | White-light hexagon at a lens focus → a six-pointed colored star (iris starburst) |
 | `grating_spectrometer.py` | Grating + lens spectrometer — a Ronchi grating giving symmetric focused spectra vs. a blazed grating steering the energy into one order |
+| `cross_grating_lens.py` | Square (cross) grating at a lens focus → a centered lattice of orders at `(m λ f / d, n λ f / d)`, monochromatic and white-light (each order dispersed) |
 
 ```bash
 python examples/simple_fresnel_diffraction.py
