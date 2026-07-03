@@ -4,10 +4,10 @@ Two levels live here:
 
 - **Array operators** ``FFT2`` / ``IFFT2`` — centered 2D (inverse) FFTs that
   keep the zero-frequency component at the center of the array, so fields on
-  symmetric grids (from :func:`diffraction.grids.make_grid`) transform without
+  symmetric grids (from :func:`diffractor.mathutils.grids.make_grid`) transform without
   extra bookkeeping. These are the fast O(N log N) core on the FFT-native grid.
 - **Field operators** ``FT2`` / ``IFT2`` — the Fourier transform understood as
-  an *operator applied to a* :class:`~diffraction.field.Field`. On the native
+  an *operator applied to a* :class:`~diffractor.physics.field.Field`. On the native
   conjugate grid they defer to ``FFT2`` / ``IFFT2``; given an explicit target
   grid they evaluate the transform there via a direct matrix DFT (exact, no
   extra dependencies) or, for uniform grids, a chirp-Z transform (O(N log N),
@@ -24,7 +24,7 @@ from typing import Optional
 import numpy as np
 
 from .backend import array_module
-from .field import Field
+from ..physics.field import Field
 from .grids import Grid, grid_spacing
 
 __all__ = ["FFT2", "IFFT2", "FT2", "IFT2", "frequency_grid"]

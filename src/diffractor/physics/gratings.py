@@ -2,10 +2,10 @@
 
 Amplitude gratings are ``(x, y, ...) -> Array`` transmission kernels, used just
 like the aperture masks — wrap them with
-:func:`~diffraction.apertures.antialiased` to get a ``Field`` with grey edges,
+:func:`~diffractor.physics.apertures.antialiased` to get a ``Field`` with grey edges,
 or multiply directly onto a source field. Phase gratings are built with
 :func:`phase_grating`, which imprints a periodic optical-path profile through
-:func:`~diffraction.surfaces.thin_element_phase`, so their phase is correctly
+:func:`~diffractor.physics.surfaces.thin_element_phase`, so their phase is correctly
 chromatic (``k0 = 2π/λ``).
 
 A grating of period ``d`` sends order ``m`` to angle ``sin θ_m = m λ / d``; in
@@ -26,7 +26,7 @@ from typing import Tuple
 import numpy as np
 
 from .field import Field
-from .grids import Array, Grid
+from ..mathutils.grids import Array, Grid
 from .surfaces import thin_element_phase
 
 __all__ = [
@@ -194,7 +194,7 @@ def phase_grating(
 
     A periodic surface relief of peak-to-valley ``height`` between media ``n1``
     and ``n2`` imprints ``exp(i k0 (n1 - n2) sag)`` (via
-    :func:`~diffraction.surfaces.thin_element_phase`), so the phase depth is
+    :func:`~diffractor.physics.surfaces.thin_element_phase`), so the phase depth is
     ``2π (n2 - n1) height / λ`` and correctly wavelength-dependent.
 
     Parameters

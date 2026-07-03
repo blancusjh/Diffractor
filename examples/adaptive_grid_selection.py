@@ -16,12 +16,10 @@ recommended grid.
 Run with:  python examples/adaptive_grid_selection.py
 """
 
-from diffraction import (
-    antialiased,
-    asm_propagator,
+from diffractor import (
+    MonochromaticField,
     circular_aperture,
     make_grid,
-    plot_intensity,
     recommend_grid_convergence,
 )
 
@@ -33,12 +31,17 @@ N_OLD = 1024  # the coarse grid that aliases
 
 
 def aperture(grid):
-    return antialiased(circular_aperture, grid, RADIUS)
+    return MonochromaticField(grid, 1.0, wavelength=WAVELENGTH).add_aperture(
+        circular_aperture, RADIUS, antialiased=True
+    ).to_field()
 
 
 def propagate(n):
     grid = make_grid(n, L)
-    return asm_propagator(aperture(grid), z=Z, wavelength=WAVELENGTH, pad_factor=2)
+    U0 = MonochromaticField(grid, 1.0, wavelength=WAVELENGTH).add_aperture(
+        circular_aperture, RADIUS, antialiased=True
+    )
+    return U0.propagate(Z, method="asm", pad_factor=2)
 
 
 def main() -> None:
@@ -67,10 +70,10 @@ def main() -> None:
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(1, 2, figsize=(11, 4.6), constrained_layout=True)
-    plot_intensity(ax[0], old, title=f"N = {N_OLD} (aliased cross-hatch)")
+    old.plot(ax[0], title=f"N = {N_OLD} (aliased cross-hatch)")
     ax[0].set_xlim(-3e-3, 3e-3)
     ax[0].set_ylim(-3e-3, 3e-3)
-    plot_intensity(ax[1], new, title=f"Recommended N = {rec.n} (clean rings)")
+    new.plot(ax[1], title=f"Recommended N = {rec.n} (clean rings)")
     ax[1].set_xlim(-3e-3, 3e-3)
     ax[1].set_ylim(-3e-3, 3e-3)
     fig.suptitle("recommend_grid_convergence picks an adequate near-field grid")

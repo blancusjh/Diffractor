@@ -4,7 +4,7 @@ Each function evaluates a boolean transmission mask on ``(x, y)`` coordinate
 arrays. Cast to complex (or multiply directly into a complex field) to use
 them as thin amplitude screens. Exception: :func:`lattice_aperture` returns a
 *float* mask (its tiles may overlap or be antialiased), like the grating
-kernels in :mod:`diffraction.gratings` — combine those arithmetically
+kernels in :mod:`diffractor.physics.gratings` — combine those arithmetically
 (``*``, ``1 - m``) rather than with boolean operators.
 
 Hard-edged masks sampled on a Cartesian grid have jagged, pixelated edges
@@ -20,7 +20,7 @@ from typing import Callable, Tuple
 import numpy as np
 
 from .field import Field
-from .grids import Array, Grid, grid_spacing
+from ..mathutils.grids import Array, Grid, grid_spacing
 
 __all__ = [
     "annular_aperture",

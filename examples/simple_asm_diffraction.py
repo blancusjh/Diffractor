@@ -9,12 +9,10 @@ Run with:  python examples/simple_asm_diffraction.py
 
 import matplotlib.pyplot as plt
 
-from diffraction import (
-    antialiased,
-    asm_propagator,
+from diffractor import (
+    MonochromaticField,
     circular_aperture,
     make_grid,
-    plot_intensity,
 )
 
 N = 2048  # samples per side
@@ -38,12 +36,14 @@ RADIUS = 0.3e-3  # aperture radius [m]
 def main() -> None:
     grid = make_grid(N, L)
 
-    U0 = antialiased(circular_aperture, grid, RADIUS)
-    Uz = asm_propagator(U0, z=Z, wavelength=WAVELENGTH, pad_factor=2)
+    U0 = MonochromaticField(grid, 1.0, wavelength=WAVELENGTH).add_aperture(
+        circular_aperture, RADIUS, antialiased=True
+    )
+    Uz = U0.propagate(Z, method="asm", pad_factor=2)
 
     fig, ax = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
-    plot_intensity(ax[0], U0, title="Input intensity")
-    plot_intensity(ax[1], Uz, title=f"Propagated intensity (z = {Z} m)")
+    U0.plot(ax[0], title="Input intensity")
+    Uz.plot(ax[1], title=f"Propagated intensity (z = {Z} m)")
     plt.show()
 
 

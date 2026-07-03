@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .field import Field
-from .grids import Array, Grid
+from ..mathutils.grids import Array, Grid
 
 __all__ = [
     "CartesianSurface",

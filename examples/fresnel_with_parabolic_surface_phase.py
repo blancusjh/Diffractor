@@ -11,13 +11,11 @@ Run with:  python examples/fresnel_with_parabolic_surface_phase.py
 
 import matplotlib.pyplot as plt
 
-from diffraction import (
+from diffractor import (
+    MonochromaticField,
     ParabolicSurface,
-    antialiased,
     circular_aperture,
-    fresnel_zoom_propagator,
     make_grid,
-    plot_intensity,
 )
 
 N = 2048  # samples per side
@@ -34,16 +32,15 @@ def main() -> None:
     x, y = grid
 
     surface = ParabolicSurface(focal_length=FOCAL_LENGTH)
-    U0 = antialiased(circular_aperture, grid, RADIUS)
-    U_after = U0 * surface.phase_mask(grid, WAVELENGTH, N1, N2)
+    U_after = MonochromaticField(grid, 1.0, wavelength=WAVELENGTH).add_aperture(
+        circular_aperture, RADIUS, antialiased=True
+    ).add_surface(surface, n1=N1, n2=N2)
 
     # Paraxial focus of the refracting parabola in medium n2.
     z_focus = 2.0 * FOCAL_LENGTH * N2 / (N2 - N1)
-    Uz = fresnel_zoom_propagator(
-        U_after,
-        z=z_focus,
-        wavelength=WAVELENGTH,
-        n=N2,
+    Uz = U_after.propagate(
+        z_focus,
+        method="fresnel_zoom",
         output_half_width=ZOOM,
     )
 
@@ -60,8 +57,8 @@ def main() -> None:
     ax[0].set_ylabel("y [m]")
     fig.colorbar(im, ax=ax[0], fraction=0.046, pad=0.04)
 
-    plot_intensity(ax[1], U_after, title="Intensity after surface")
-    plot_intensity(ax[2], Uz, title=f"Focal plane (z = {z_focus:.2f} m)", vmin=-4.0)
+    U_after.plot(ax[1], title="Intensity after surface")
+    Uz.plot(ax[2], title=f"Focal plane (z = {z_focus:.2f} m)", vmin=-4.0)
     plt.show()
 
 

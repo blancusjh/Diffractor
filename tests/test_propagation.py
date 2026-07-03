@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from diffraction import (
+from diffractor import (
     Field,
     asm_propagator,
     circular_aperture,
@@ -214,8 +214,8 @@ class TestFraunhofer:
 def test_single_fft_fresnel_rejects_nonpositive_z():
     import numpy as np
     import pytest
-    from diffraction import (
-        antialiased,
+    from diffractor import (
+        MonochromaticField,
         circular_aperture,
         fraunhofer_propagator,
         fresnel_output_grid,
@@ -224,7 +224,8 @@ def test_single_fft_fresnel_rejects_nonpositive_z():
     )
 
     grid = make_grid(64, 2e-3)
-    U0 = antialiased(circular_aperture, grid, 0.5e-3)
+    U0 = MonochromaticField(grid, 1.0).add_aperture(
+        circular_aperture, 0.5e-3, antialiased=True).to_field()
     for z in (0.0, -0.1):
         with pytest.raises(ValueError):
             fresnel_output_grid(grid, z, 532e-9)

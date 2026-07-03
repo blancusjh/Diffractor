@@ -6,7 +6,7 @@ daylight) spectrum and each wavelength's pattern lands, slightly rescaled, on
 the same screen; composited through the CIE 1931 color-matching functions the
 rings come out colored — red rings sit outside blue ones.
 
-`propagate_polychromatic` does the per-wavelength propagation onto a shared
+`PolychromaticField` does the per-wavelength propagation onto a shared
 output grid and the spectrum→sRGB conversion; here we sample the visible band
 weighted by the D65 illuminant.
 
@@ -15,14 +15,12 @@ Run with:  python examples/polychromatic_aperture.py
 
 import numpy as np
 
-from diffraction import (
-    antialiased,
+from diffractor import (
+    MonochromaticField,
+    PolychromaticField,
     circular_aperture,
     d65_weights,
     make_grid,
-    plot_intensity,
-    plot_rgb,
-    propagate_polychromatic,
 )
 
 N = 512
@@ -35,28 +33,30 @@ SCREEN_HALF = 2.4e-3  # output half-width [m]
 
 def main() -> None:
     grid = make_grid(N, L)
-    U0 = antialiased(circular_aperture, grid, RADIUS)
+    U0 = MonochromaticField(grid, 1.0).add_aperture(circular_aperture, RADIUS, antialiased=True)
 
     wavelengths = np.linspace(410e-9, 680e-9, N_WAVELENGTHS)
     weights = d65_weights(wavelengths * 1e9)
 
-    rgb, out_grid = propagate_polychromatic(
-        U0,
-        wavelengths,
-        z=Z,
-        weights=weights,
-        output_half_width=SCREEN_HALF,
-        output_samples=512,
-        gamut="clip",
-        stretch=0.6,
-        saturation=1.4,
+    img = (
+        PolychromaticField(grid, 1.0, wavelengths=wavelengths, weights=weights)
+        .add_aperture(circular_aperture, RADIUS, antialiased=True)
+        .propagate(
+            Z,
+            method="fresnel_zoom",
+            output_half_width=SCREEN_HALF,
+            output_samples=512,
+            gamut="clip",
+            stretch=0.6,
+            saturation=1.4,
+        )
     )
 
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(1, 2, figsize=(11, 4.6), constrained_layout=True)
-    plot_intensity(ax[0], U0, title="Aperture")
-    plot_rgb(ax[1], rgb, out_grid, title=f"White-light pattern (z = {Z} m)")
+    U0.plot(ax[0], title="Aperture")
+    img.plot(ax[1], title=f"White-light pattern (z = {Z} m)")
     fig.suptitle("Chromatic diffraction rings under a D65 (daylight) spectrum")
     plt.show()
 

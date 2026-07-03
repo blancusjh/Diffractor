@@ -1,4 +1,4 @@
-# diffraction
+# diffractor
 
 A small, tested scalar-diffraction toolkit built on NumPy. It propagates
 complex optical fields with Fourier-optics methods and models apertures and
@@ -12,11 +12,48 @@ cone, focus, and the diverging field beyond — from
 the exact stigmatic Cartesian oval (left) against its paraboloid (center) at
 NA 0.24, with the focal-plane PSFs below.*
 
-A field is a first-class object — `Field(grid, values)`, the sampling `Grid`
-plus its complex samples — that flows through the whole pipeline (aperture →
-surface phase → propagator → plot). Coordinate queries live on the grid
-(`field.grid.x`, `field.grid.spacing`) and Fourier transforms are *operators*
-applied to a field (`FT2`, `IFT2`), not methods on it.
+The primary API is the fluent `MonochromaticField`: you build a field on a
+`Grid`, chain optical elements onto it, and propagate — each step reads as one
+pipeline.
+
+```python
+U = (MonochromaticField(grid, 1.0, wavelength=532e-9)   # unit plane wave on the grid
+     .add_aperture(circular_aperture, 0.3e-3, antialiased=True)
+     .propagate(1.15, method="fresnel"))                # -> a field on the output plane
+```
+
+The field carries its own `wavelength` and medium index `n`, so the propagators
+never repeat them. Underneath sits an immutable `Field` — the sampling `Grid`
+plus its complex samples — reachable with `.to_field()` for the Fourier
+operators (`FT2`, `IFT2`) and any low-level routine.
+
+Its broadband sibling `PolychromaticField` shares the exact same building
+syntax, but carries an array of `wavelengths`; it replays the build at each one
+and composites the result to a true-color sRGB image:
+
+```python
+img = (PolychromaticField(grid, 1.0, wavelengths=wl, weights=d65_weights(wl * 1e9))
+       .add_aperture(polygon_aperture, 6, 0.5e-3, antialiased=True)   # a hexagon
+       .propagate(0.3, method="fresnel_zoom", output_half_width=2e-3))
+img.plot(ax)                                            # -> a colored hexagonal pattern
+```
+
+Wavelength-dependent elements (`add_lens`, `add_surface`, `add_phase_grating`)
+automatically get their correct per-λ phase; amplitude masks stay
+wavelength-independent.
+
+## Package layout at a glance
+
+The code is split into three subpackages, and every public name is also
+re-exported flat from the top-level `diffractor` namespace:
+
+- **`diffractor.physics`** — fields (`MonochromaticField`, `PolychromaticField`,
+  `Field`), sources, apertures, gratings, surfaces, propagators,
+  longitudinal/polychromatic propagation and aberrations: the optical core.
+- **`diffractor.mathutils`** — grids, the Fourier operators, Fresnel sampling
+  criteria and the CPU/GPU array backends: the numerical utilities.
+- **`diffractor.viz`** — matplotlib helpers, interactive VisPy viewers and the
+  CIE colorimetry used to composite broadband fields to sRGB.
 
 ## Gallery
 
@@ -53,7 +90,7 @@ not the idealized `thin_lens`) in white light, sweeping the screen through focus
 
 ### Aberration: stigmatic oval vs. paraboloid
 
-The [flagship comparison](#diffraction) at the top of this page shows a single
+The [flagship comparison](#diffractor) at the top of this page shows a single
 very-high-NA case; swept across three apertures, it shows spherical
 aberration *emerging* as the aperture opens:
 
@@ -67,14 +104,28 @@ curvature — degrades from imperceptible (0.1 waves) to a destroyed image
 
 ## Features
 
-- **Field & Grid** (`diffraction.field`, `diffraction.grids`) — `Field`
-  bundles a `Grid` with its samples; `Grid` owns coordinate access (`.x`,
-  `.y`, `.spacing`) and still unpacks as `x, y = grid`.
-- **Fourier operators** (`diffraction.fourier`) — `FFT2` / `IFFT2` (centered
-  array FFTs on the native grid) and `FT2` / `IFT2` (field operators that also
-  accept an explicit target grid and evaluate the transform there, via an exact
-  matrix DFT or an optional chirp-Z fast path). Plus `frequency_grid`.
-- **Propagators** (`diffraction.propagation`)
+- **The fluent field** (`diffractor.physics.monochromatic`) —
+  `MonochromaticField(grid, source, wavelength=...)` builds a single-wavelength
+  field (a callable `f(x, y)` or a constant across the grid), then chains
+  `.add_aperture` / `.add_grating` / `.add_lens` / `.add_surface` / `.add_phase`
+  and propagates with `.propagate(z, method=...)` or slices an edge-on
+  `.longitudinal(zs)`. It carries `wavelength` and `n`, wrapping the immutable
+  `Field` (reachable via `.to_field()`).
+- **The broadband field** (`diffractor.physics.polychromatic`) —
+  `PolychromaticField(grid, source, wavelengths=..., weights=...)` has the same
+  builder methods, records them, and replays them at each wavelength;
+  `.propagate(z, method=...)` returns a `PolychromaticImage` (an sRGB array +
+  its grid, with `.plot(ax)`), and `.longitudinal(zs)` a true-color
+  `RGBLongitudinalSection`.
+- **Field & Grid** (`diffractor.physics.field`, `diffractor.mathutils.grids`) —
+  `Field` bundles a `Grid` with its samples; `Grid` owns coordinate access
+  (`.x`, `.y`, `.spacing`) and still unpacks as `x, y = grid`.
+- **Fourier operators** (`diffractor.mathutils.fourier`) — `FFT2` / `IFFT2`
+  (centered array FFTs on the native grid) and `FT2` / `IFT2` (field operators
+  that also accept an explicit target grid and evaluate the transform there, via
+  an exact matrix DFT or an optional chirp-Z fast path). Plus `frequency_grid`.
+- **Propagators** (`diffractor.physics.propagation`), selected by
+  `.propagate(z, method=...)` or callable directly:
   - `fresnel_propagator` — single-FFT Fresnel (near-field, paraxial) method,
     with its scaled output plane given by `fresnel_output_grid`.
   - `fraunhofer_propagator` — far-field limit on the same output grid.
@@ -84,57 +135,60 @@ curvature — degrades from imperceptible (0.1 waves) to a destroyed image
   - `asm_propagator` — angular-spectrum method (`IFT2(H · FT2(field))`), same
     grid in and out; supports back-propagation (`z < 0`), evanescent decay,
     and — via an explicit `output_grid` — decoupled output sampling (MPASM).
-- **Batched / GPU propagation** (`diffraction.AngularSpectrum`) — a reusable
+- **Batched / GPU propagation** (`diffractor.AngularSpectrum`) — a reusable
   angular-spectrum object that precomputes the transfer function and the input
   FFT once, so a z-sweep, movie or depth stack costs one inverse FFT per plane
   (`propagate`, `propagate_stack`, `intensity_stack`). Runs on the CPU (NumPy)
   or, with the `gpu` extra, on an NVIDIA GPU (CuPy) — chosen automatically from
   the input array or forced with `device="gpu"`.
-- **Interactive viewers** (`diffraction.viz`, optional `viz` extra) — VisPy,
+- **Interactive viewers** (`diffractor.viz`, optional `viz` extra) — VisPy,
   GPU-rendered pan/zoom viewers for large fields: `plot_scalar_field` (2D),
   `plot_scalar_field_3d` (surface mesh) and `animate` (z-sweep movie with
   play/pause and frame-stepping).
-- **Grid sizing** (`diffraction.sampling`) — `recommend_grid_convergence`
+- **Grid sizing** (`diffractor.mathutils.sampling`) — `recommend_grid_convergence`
   picks an adequate near-field grid by convergence testing (the honest fix for
   input-side aliasing, which no output-grid trick can cure), plus the Fresnel
   sampling criteria `fresnel_min_distance` / `fresnel_max_spacing` and
   `next_fft_size`.
-- **Polychromatic rendering** (`diffraction.polychromatic`,
-  `diffraction.colorimetry`) — `propagate_polychromatic` propagates a
-  broadband field wavelength-by-wavelength onto a shared output grid and
+- **Polychromatic rendering** (`diffractor.physics.polychromatic`,
+  `diffractor.viz.colorimetry`) — the fluent `PolychromaticField` (above), or
+  the underlying `propagate_polychromatic`, propagates a broadband field
+  wavelength-by-wavelength onto a shared output grid and
   composites the result to an sRGB image through the CIE 1931 color-matching
   functions (analytic Wyman fit — no data file), with D65 / blackbody
   illuminants and display controls (`saturation`, `stretch`, `brightness`) for
   vivid renders. `wavelength_to_rgb`, `spectrum_to_srgb`, `plot_rgb`.
-- **Gratings** (`diffraction.gratings`) — amplitude (`ronchi_grating`,
+- **Gratings** (`diffractor.physics.gratings`) — amplitude (`ronchi_grating`,
   `sinusoidal_amplitude_grating`), 2D `cross_grating`, polar `polar_grating`
   (concentric rings × angular spokes), and chromatic `phase_grating`
   (sinusoidal / binary / blazed sawtooth). Orders land at `x_m = m λ z / d`.
-- **Apertures** (`diffraction.apertures`) — circular, rectangular, square,
-  annular, elliptical and slit masks, regular-polygon (`polygon_aperture`,
+- **Apertures** (`diffractor.physics.apertures`) — circular, rectangular,
+  square, annular, elliptical and slit masks, regular-polygon (`polygon_aperture`,
   e.g. a hexagon) and multi-slit (`nslit_aperture`, e.g. Young's double slit),
   all with adjustable centers; a `lattice_aperture` that tiles any of them on a
-  square or hexagonal lattice (hole arrays); and an `antialiased` wrapper that
-  evaluates any mask with area-coverage (grey) edge pixels.
-- **Surfaces & lenses** (`diffraction.surfaces`) — `ParabolicSurface` and the
-  stigmatic Cartesian-oval `CartesianSurface` (sag profile + thin-element
-  `phase_mask`), plus an ideal `thin_lens` phase element that forms a field's
-  Fraunhofer pattern at its back focal plane.
-- **Sources** (`diffraction.fields`) — Gaussian beams and (tilted) plane waves.
-- **Aberrations** (`diffraction.aberrations`) — Noll-indexed, RMS-normalized
-  Zernike polynomials, least-squares wavefront fitting (`fit_zernikes`),
-  synthesis, PV/RMS metrics and the Maréchal Strehl estimate.
-- **Backends** (`diffraction.backend`) — CPU/GPU array-module resolution
-  (`array_module`, `asnumpy`, `to_device`). The GPU path is `AngularSpectrum`
-  (plus the `FFT2`/`IFFT2` operators), which runs unchanged on NumPy or CuPy;
-  the one-shot functional propagators are NumPy-first.
-- **Longitudinal fields** (`diffraction.longitudinal`) — `longitudinal_field`
-  sweeps a field through a range of distances and slices a transverse line at
-  each plane to build an `x–z` (or `y–z`) cross-section — a lens's focusing
-  cone, a beam waist, or a grating's Talbot self-imaging carpet — drawn with
-  `plot_longitudinal`. Pass `output_half_width`/`output_samples` to sample the
-  line on a decoupled window (matrix-DFT), resolving e.g. a focal waist far
-  finer than the input spacing without enlarging the input `N`.
+  square or hexagonal lattice (hole arrays). Pass `antialiased=True` to
+  `.add_aperture` to evaluate any mask with area-coverage (grey) edge pixels.
+- **Surfaces & lenses** (`diffractor.physics.surfaces`) — `ParabolicSurface`
+  and the stigmatic Cartesian-oval `CartesianSurface` (sag profile +
+  thin-element `phase_mask`), plus an ideal `thin_lens` phase element
+  (`.add_lens`) that forms a field's Fraunhofer pattern at its back focal plane.
+- **Sources** (`diffractor.physics.sources`) — Gaussian beams and (tilted)
+  plane waves, when you want an explicit source `Field`.
+- **Aberrations** (`diffractor.physics.aberrations`) — Noll-indexed,
+  RMS-normalized Zernike polynomials, least-squares wavefront fitting
+  (`fit_zernikes`), synthesis, PV/RMS metrics and the Maréchal Strehl estimate.
+- **Backends** (`diffractor.mathutils.backend`) — CPU/GPU array-module
+  resolution (`array_module`, `asnumpy`, `to_device`). The GPU path is
+  `AngularSpectrum` (plus the `FFT2`/`IFFT2` operators), which runs unchanged on
+  NumPy or CuPy; the one-shot functional propagators are NumPy-first.
+- **Longitudinal fields** (`diffractor.physics.longitudinal`) —
+  `.longitudinal(zs)` (or `longitudinal_field`) sweeps a field through a range
+  of distances and slices a transverse line at each plane to build an `x–z` (or
+  `y–z`) cross-section — a lens's focusing cone, a beam waist, or a grating's
+  Talbot self-imaging carpet — drawn with `plot_longitudinal`. Pass
+  `output_half_width`/`output_samples` to sample the line on a decoupled window
+  (matrix-DFT), resolving e.g. a focal waist far finer than the input spacing
+  without enlarging the input `N`.
 - **Helpers** — `make_grid` for FFT-friendly sampling grids and
   `plot_intensity` for quick log-intensity figures.
 
@@ -148,7 +202,7 @@ git clone https://github.com/blancusjh/diffractor.git
 cd diffractor
 pip install -e .          # core (NumPy + matplotlib)
 pip install -e ".[dev]"   # + pytest, to run the tests
-pip install -e ".[viz]"   # + VisPy interactive viewers (diffraction.viz)
+pip install -e ".[viz]"   # + VisPy interactive viewers (diffractor.viz)
 pip install -e ".[gpu]"   # + CuPy GPU backend (pick the wheel for your CUDA)
 ```
 
@@ -156,27 +210,34 @@ pip install -e ".[gpu]"   # + CuPy GPU backend (pick the wheel for your CUDA)
 
 ```python
 import matplotlib.pyplot as plt
-from diffraction import (
-    make_grid, antialiased, circular_aperture,
-    fresnel_propagator, plot_intensity,
-)
+from diffractor import MonochromaticField, make_grid, circular_aperture
 
-grid = make_grid(2048, 6e-3)                       # 2048×2048 samples over 6 mm
+grid = make_grid(2048, 6e-3)                        # 2048×2048 samples over 6 mm
 
-U0 = antialiased(circular_aperture, grid, 0.3e-3)  # a Field on the grid
-Uz = fresnel_propagator(U0, z=1.15, wavelength=532e-9)   # a Field on the scaled output grid
+U0 = MonochromaticField(grid, 1.0, wavelength=532e-9).add_aperture(
+    circular_aperture, 0.3e-3, antialiased=True)    # unit plane wave through a soft-edged pupil
+Uz = U0.propagate(1.15, method="fresnel")           # a field on the scaled output grid
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
-plot_intensity(ax[0], U0, title="Aperture")
-plot_intensity(ax[1], Uz, title="Fresnel pattern at z = 1.15 m")
+U0.plot(ax[0], title="Aperture")
+Uz.plot(ax[1], title="Fresnel pattern at z = 1.15 m")
 plt.show()
 ```
+
+`.propagate` returns another `MonochromaticField`, so you keep chaining:
+`.propagate(...).add_lens(...).propagate(...)`. Reach the raw samples with
+`Uz.values`, the intensity with `Uz.intensity`, or the underlying `Field` with
+`Uz.to_field()`.
 
 ### Fourier as an operator, on any grid
 
 ```python
-from diffraction import FT2, IFT2, Grid
+from diffractor import MonochromaticField, FT2, IFT2, Grid, circular_aperture, make_grid
 import numpy as np
+
+grid = make_grid(1024, 6e-3)
+U0 = MonochromaticField(grid, 1.0).add_aperture(
+    circular_aperture, 0.3e-3, antialiased=True).to_field()   # a low-level Field
 
 spectrum = FT2(U0)                 # -> Field on the native frequency grid
 back = IFT2(spectrum)              # -> Field, IFT2(FT2(U0)) == U0
@@ -191,20 +252,20 @@ zoomed = FT2(U0, kgrid=Grid(kx, ky))   # exact matrix DFT (or chirp-Z with SciPy
 
 ```python
 import numpy as np
-from diffraction import (
-    make_grid, ronchi_grating, square_aperture, Field,
-    d65_weights, propagate_polychromatic, plot_rgb,
+from diffractor import (
+    PolychromaticField, make_grid, ronchi_grating, square_aperture, d65_weights,
 )
 
 grid = make_grid(1024, 4e-3)
-x, y = grid
-grating = ronchi_grating(x, y, period=60e-6) * square_aperture(x, y, 1.2e-3)
-U0 = Field(grid, grating.astype(complex))
-
 wl = np.linspace(410e-9, 680e-9, 40)
-rgb, out = propagate_polychromatic(
-    U0, wl, z=0.5, weights=d65_weights(wl * 1e9), output_half_width=27e-3,
-)   # -> a white 0th order flanked by dispersed rainbow orders
+
+# The amplitude grating is wavelength-independent (dispersion comes from
+# propagation), so it is recorded once and replayed at each wavelength.
+img = (PolychromaticField(grid, 1.0, wavelengths=wl, weights=d65_weights(wl * 1e9))
+       .add_grating(ronchi_grating, 60e-6, duty=0.5)
+       .add_aperture(square_aperture, 1.2e-3)
+       .propagate(0.5, method="fresnel_zoom", output_half_width=27e-3))
+# -> a white 0th order flanked by dispersed rainbow orders; draw with img.plot(ax)
 ```
 
 ### Batched and GPU propagation
@@ -214,15 +275,16 @@ CuPy is installed:
 
 ```python
 import numpy as np
-from diffraction import AngularSpectrum, antialiased, circular_aperture, make_grid
+from diffractor import AngularSpectrum, MonochromaticField, circular_aperture, make_grid
 
 grid = make_grid(1024, 6e-3)
-U0 = antialiased(circular_aperture, grid, 0.3e-3)
+U0 = MonochromaticField(grid, 1.0, wavelength=532e-9).add_aperture(
+    circular_aperture, 0.3e-3, antialiased=True)
 
-prop = AngularSpectrum(U0, wavelength=532e-9, pad_factor=2)   # device="gpu" to force CuPy
-frames = prop.intensity_stack(np.linspace(5e-3, 0.12, 60))    # 60 planes, one IFFT each
+prop = AngularSpectrum(U0.to_field(), wavelength=532e-9, pad_factor=2)   # device="gpu" to force CuPy
+frames = prop.intensity_stack(np.linspace(5e-3, 0.12, 60))              # 60 planes, one IFFT each
 
-from diffraction import animate            # needs the 'viz' extra
+from diffractor import animate            # needs the 'viz' extra
 animate([np.log10(f + 1e-6) for f in frames], list(np.linspace(5e-3, 0.12, 60)))
 ```
 
@@ -231,14 +293,18 @@ animate([np.log10(f + 1e-6) for f in frames], list(np.linspace(5e-3, 0.12, 60)))
 Surfaces act as thin phase elements: crossing an interface between media
 `n1` and `n2` multiplies the field by `exp(i k0 (n1 - n2) z(x, y))`, where
 the sag `z(x, y)` is measured toward the second medium (a ray at height
-`(x, y)` covers that extra distance still inside `n1`).
+`(x, y)` covers that extra distance still inside `n1`). `.add_surface` applies
+the mask and advances the field's medium index to `n2`, so the next
+`.propagate` uses it automatically.
 
 ```python
-from diffraction import ParabolicSurface, asm_propagator
+from diffractor import MonochromaticField, ParabolicSurface, circular_aperture, make_grid
 
-surface = ParabolicSurface(focal_length=0.12)
-U_after = U0 * surface.phase_mask(grid, wavelength=532e-9, n1=1.0, n2=1.5)
-Uz = asm_propagator(U_after, z=0.2, wavelength=532e-9, n=1.5)
+grid = make_grid(1024, 6e-3)
+Uz = (MonochromaticField(grid, 1.0, wavelength=532e-9)
+      .add_aperture(circular_aperture, 0.3e-3, antialiased=True)
+      .add_surface(ParabolicSurface(focal_length=0.12), n1=1.0, n2=1.5)
+      .propagate(0.2, method="asm", pad_factor=2))    # propagates in n = 1.5
 ```
 
 ## Examples
@@ -254,8 +320,8 @@ Runnable scripts live in [`examples/`](examples):
 | `asm_with_cartesian_surface_phase.py` | Stigmatic Cartesian-oval surface, ASM propagation |
 | `cartesian_vs_parabolic_aberration.py` | Very-high-NA stigmatic Cartesian oval vs its paraboloid: edge-on **system caustics** (incident beam, refracting surface drawn on the x–z map, converging cone, focus and diverging field — one continuous propagation) + 2-D focal spots in one figure, quantitative metrics (shape difference, OPD, through-focus, PSF, encircled energy) in a second (needs `scipy`) |
 | `aberration_measurement.py` | Zernike decomposition of the exact OPD of both surfaces; Maréchal Strehl cross-check |
-| `asm_zsweep_animation.py` | Batched `AngularSpectrum` z-sweep, GPU when available, animated with `diffraction.viz` (needs the `viz` extra to animate) |
-| `gpu_focus_viewer.py` | Batched `AngularSpectrum` focus scan through a lens surface, GPU when available, viewed with `diffraction.viz`'s 2D/3D VisPy viewers (needs the `viz` extra to view) |
+| `asm_zsweep_animation.py` | Batched `AngularSpectrum` z-sweep, GPU when available, animated with `diffractor.viz` (needs the `viz` extra to animate) |
+| `gpu_focus_viewer.py` | Batched `AngularSpectrum` focus scan through a lens surface, GPU when available, viewed with `diffractor.viz`'s 2D/3D VisPy viewers (needs the `viz` extra to view) |
 | `grid_decoupled_asm.py` | Resolving a focal spot with a decoupled `output_grid` (fine output sampling from a modest input `N`) |
 | `adaptive_grid_selection.py` | `recommend_grid_convergence` picking an adequate near-field grid; before/after cross-hatch → clean rings |
 | `polychromatic_aperture.py` | White-light (D65) circular aperture → chromatic diffraction rings |
@@ -268,7 +334,7 @@ Runnable scripts live in [`examples/`](examples):
 | `grating_spectrometer.py` | Grating + lens spectrometer — a Ronchi grating giving symmetric focused spectra vs. a blazed grating steering the energy into one order |
 | `cross_grating_lens.py` | Square (cross) grating at a lens focus → a centered lattice of orders at `(m λ f / d, n λ f / d)`, monochromatic and white-light (each order dispersed) |
 | `polar_grating_lens.py` | Polar grating (rings × spokes) at a lens focus → a centered polar lattice of orders; the white-light ring orders disperse radially (blue in, red out) |
-| `lens_longitudinal_focus.py` | The focusing cone of a lens seen edge-on (`longitudinal_field`) — converging cone, focal waist at `z = f`, diverging cone |
+| `lens_longitudinal_focus.py` | The focusing cone of a lens seen edge-on (`.longitudinal(zs)`) — converging cone, focal waist at `z = f`, diverging cone |
 | `lens_longitudinal_polychromatic.py` | The same focusing cone in white light (`propagate_polychromatic_longitudinal`) — a true-color edge-on cross-section, colored fringing from each wavelength's own Airy scale |
 | `grating_talbot_carpet.py` | A grating's Talbot carpet — the `x–z` longitudinal near field showing self-images at `z_T = 2 d²/λ` and fractional revivals between |
 | `oval_grating_polychromatic_animation.py` | A square grating imaged by a real refracting singlet (`CartesianSurface`, not the idealized `thin_lens`) — an animated white-light GIF sweeping the screen through focus |
@@ -297,13 +363,13 @@ python examples/simple_fresnel_diffraction.py
   circular, so fields that diffract to the window edge wrap around —
   `pad_factor=2` zero-pads before propagating and crops afterwards;
   (3) hard-edged masks have pixelated edges whose spurious spectral
-  content shows up as streaks in the far field — `antialiased(...)`
-  evaluates masks with area-coverage edge pixels; (4) a hard aperture in
-  the deep near field (high Fresnel number) develops boundary-wave ripples
-  finer than a coarse `dx`, and the undersampled content folds back as a
-  non-physical axis-aligned cross-hatch — this is an *input* sampling limit
-  (`k_max = π/dx` is set by `dx` alone), so it is fixed only by a finer
-  `dx`, which `recommend_grid_convergence` sizes for you.
+  content shows up as streaks in the far field — `.add_aperture(...,
+  antialiased=True)` evaluates masks with area-coverage edge pixels; (4) a
+  hard aperture in the deep near field (high Fresnel number) develops
+  boundary-wave ripples finer than a coarse `dx`, and the undersampled content
+  folds back as a non-physical axis-aligned cross-hatch — this is an *input*
+  sampling limit (`k_max = π/dx` is set by `dx` alone), so it is fixed only by a
+  finer `dx`, which `recommend_grid_convergence` sizes for you.
 - **Decoupled output grids.** An explicit `output_grid` (on `asm_propagator`,
   `AngularSpectrum` and `fresnel_zoom_propagator`, or an explicit `kgrid` on
   `FT2`/`IFT2`) samples the transform on a grid of your choice via a matrix
@@ -336,24 +402,29 @@ pytest
 ## Project layout
 
 ```
-src/diffraction/
-├── grids.py         # Grid class, make_grid, grid_spacing
-├── field.py         # Field: grid + samples
-├── fourier.py       # FFT2 / IFFT2 and the FT2 / IFT2 operators, frequency_grid
-├── propagation.py   # fresnel, fraunhofer, angular-spectrum propagators
-├── asm.py           # AngularSpectrum: batched CPU/GPU angular spectrum
-├── sampling.py      # recommend_grid_convergence, Fresnel sampling criteria
-├── backend.py       # CPU/GPU array-module resolution (NumPy / CuPy)
-├── apertures.py     # aperture masks
-├── gratings.py      # amplitude / phase / blazed / 2D diffraction gratings
-├── fields.py        # gaussian_beam, plane_wave
-├── surfaces.py      # ParabolicSurface, CartesianSurface, thin-element phase
-├── aberrations.py   # Zernike fitting, PV/RMS, Maréchal Strehl
-├── colorimetry.py   # CIE 1931 CMF, wavelength/spectrum -> sRGB
-├── polychromatic.py # broadband propagation -> color image
-├── longitudinal.py  # x-z / y-z axial field cross-sections (focus, Talbot)
-├── plotting.py      # matplotlib intensity + RGB display helpers
-└── viz.py           # optional VisPy interactive viewers + animation
-examples/            # runnable demo scripts
-tests/               # pytest suite
+src/diffractor/
+├── __init__.py            # flat public API re-exports + version
+├── physics/               # the optical core
+│   ├── field.py           # Field: grid + samples
+│   ├── monochromatic.py   # MonochromaticField: the fluent field API
+│   ├── sources.py         # gaussian_beam, plane_wave
+│   ├── apertures.py       # aperture masks (+ antialiasing helper)
+│   ├── gratings.py        # amplitude / phase / blazed / 2D gratings
+│   ├── surfaces.py        # ParabolicSurface, CartesianSurface, thin lens
+│   ├── propagation.py     # fresnel, fraunhofer, angular-spectrum propagators
+│   ├── asm.py             # AngularSpectrum: batched CPU/GPU angular spectrum
+│   ├── longitudinal.py    # x-z / y-z axial field cross-sections (focus, Talbot)
+│   ├── polychromatic.py   # PolychromaticField + broadband propagation -> color
+│   └── aberrations.py     # Zernike fitting, PV/RMS, Maréchal Strehl
+├── mathutils/             # numerical utilities
+│   ├── grids.py           # Grid class, make_grid, grid_spacing
+│   ├── fourier.py         # FFT2 / IFFT2 and the FT2 / IFT2 operators, frequency_grid
+│   ├── sampling.py        # recommend_grid_convergence, Fresnel sampling criteria
+│   └── backend.py         # CPU/GPU array-module resolution (NumPy / CuPy)
+└── viz/                   # visualization
+    ├── plotting.py        # matplotlib intensity + RGB display helpers
+    ├── viewers.py         # optional VisPy interactive viewers + animation
+    └── colorimetry.py     # CIE 1931 CMF, wavelength/spectrum -> sRGB
+examples/                  # runnable demo scripts
+tests/                     # pytest suite
 ```

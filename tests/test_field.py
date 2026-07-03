@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from diffraction import Field, make_grid
+from diffractor import Field, make_grid
 
 
 def _field(n=16, L=1.0, domain="space"):

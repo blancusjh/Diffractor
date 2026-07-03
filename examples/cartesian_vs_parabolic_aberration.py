@@ -51,7 +51,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import j0, j1
 
-from diffraction import CartesianSurface, LongitudinalSection, ParabolicSurface, plot_longitudinal
+from diffractor import CartesianSurface, LongitudinalSection, ParabolicSurface, plot_longitudinal
 
 # Design: a distant (near-collimated) point source imaged by a single refracting
 # surface, opened to very high NA so the oval and its paraboloid separate hugely.

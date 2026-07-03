@@ -3,7 +3,7 @@
 The exact optical path difference of each surface (spherical wave from the
 design object point, exact ray paths through the curved interface — no
 thin-element approximation) is sampled over the pupil and decomposed into
-Noll Zernike modes with the diffraction.aberrations module.
+Noll Zernike modes with the diffractor.physics.aberrations module.
 
 Expected physics: the stigmatic oval measures zero in every mode; the
 osculating paraboloid carries pure rotationally-symmetric aberration —
@@ -18,7 +18,7 @@ Run with:  python examples/aberration_measurement.py
 import matplotlib.pyplot as plt
 import numpy as np
 
-from diffraction import (
+from diffractor import (
     CartesianSurface,
     Field,
     ParabolicSurface,

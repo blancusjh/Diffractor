@@ -1,10 +1,10 @@
 """The :class:`Field` — a sampled scalar field bundled with its grid.
 
-A field is the pair ``φ = (grid, values)``: the sampling :class:`~diffraction.grids.Grid`
+A field is the pair ``φ = (grid, values)``: the sampling :class:`~diffractor.mathutils.grids.Grid`
 and the complex samples on it. Coordinate queries live on the *grid*
 (``field.grid.x``, ``field.grid.spacing``), and Fourier transforms are
-*operators* applied to a field (:func:`~diffraction.fourier.FT2`,
-:func:`~diffraction.fourier.IFT2`) — a ``Field`` deliberately exposes neither
+*operators* applied to a field (:func:`~diffractor.mathutils.fourier.FT2`,
+:func:`~diffractor.mathutils.fourier.IFT2`) — a ``Field`` deliberately exposes neither
 coordinate accessors nor transform methods of its own.
 
 The ``domain`` tag distinguishes a spatial field (``"space"``) from a spectral
@@ -16,8 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Tuple, Union
 
-from .backend import array_module, to_device
-from .grids import Array, Grid
+from ..mathutils.backend import array_module, to_device
+from ..mathutils.grids import Array, Grid
 
 __all__ = ["Field"]
 

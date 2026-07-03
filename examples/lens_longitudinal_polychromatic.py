@@ -3,7 +3,7 @@
 The polychromatic companion to `lens_longitudinal_focus.py`: the same circular
 aperture and thin lens, but propagated at ~24 wavelengths across the visible
 band and composited to sRGB at every point of the ``x–z`` cross-section with
-`propagate_polychromatic_longitudinal`.
+`PolychromaticField.longitudinal`.
 
 The lens here is *achromatic by construction* (`thin_lens` targets the same
 physical focal length regardless of wavelength — there is no dispersive
@@ -21,14 +21,13 @@ Run with:  python examples/lens_longitudinal_polychromatic.py
 
 import numpy as np
 
-from diffraction import (
-    antialiased,
+from diffractor import (
+    MonochromaticField,
+    PolychromaticField,
     circular_aperture,
     d65_weights,
     make_grid,
     plot_rgb_longitudinal,
-    propagate_polychromatic_longitudinal,
-    thin_lens,
 )
 
 N = 1024
@@ -52,29 +51,33 @@ N_PLANES_CONE = 230  # z-planes: keeps the per-plane transverse shift (set by
 
 def main() -> None:
     grid = make_grid(N, L)
-    aperture = antialiased(circular_aperture, grid, APERTURE_R)
+    aperture = MonochromaticField(grid, 1.0).add_aperture(
+        circular_aperture, APERTURE_R, antialiased=True
+    ).to_field()
 
     wavelengths = np.linspace(430e-9, 680e-9, N_WAVELENGTHS)
     weights = d65_weights(wavelengths * 1e9)
 
-    def field_of(lam):
-        return aperture * thin_lens(grid, FOCAL_LENGTH, lam)
+    # The lens phase is chromatic, so the field is rebuilt per wavelength.
+    pf = PolychromaticField(
+        grid, aperture, wavelengths=wavelengths, weights=weights
+    ).add_lens(FOCAL_LENGTH)
 
     # The wide view of the cone (matches lens_longitudinal_focus.py's framing).
     zs = np.linspace(0.55 * FOCAL_LENGTH, 1.45 * FOCAL_LENGTH, N_PLANES_CONE)
-    cone = propagate_polychromatic_longitudinal(
-        field_of, wavelengths, zs, axis="x", pad_factor=1,
+    cone = pf.longitudinal(
+        zs, axis="x", pad_factor=1,
         output_half_width=CONE_HALF_WIDTH, output_samples=CONE_SAMPLES,
-        weights=weights, gamut="clip", stretch=0.6, saturation=1.3,
+        gamut="clip", stretch=0.6, saturation=1.3,
     )
 
     # Zoom onto the waist with a decoupled fine transverse line, in color.
     airy_550 = 0.61 * 550e-9 * FOCAL_LENGTH / APERTURE_R
     zw = np.linspace(0.94 * FOCAL_LENGTH, 1.06 * FOCAL_LENGTH, 185)
-    waist = propagate_polychromatic_longitudinal(
-        field_of, wavelengths, zw, axis="x", pad_factor=1,
+    waist = pf.longitudinal(
+        zw, axis="x", pad_factor=1,
         output_half_width=5.0 * airy_550, output_samples=251,
-        weights=weights, gamut="clip", stretch=0.6, saturation=1.3,
+        gamut="clip", stretch=0.6, saturation=1.3,
     )
 
     import matplotlib.pyplot as plt
