@@ -9,7 +9,7 @@ import numpy as np
 from .field import Field
 from .grids import Array, Grid
 
-__all__ = ["intensity", "plot_intensity"]
+__all__ = ["intensity", "plot_intensity", "plot_rgb"]
 
 
 def intensity(U: Union[Field, Array], *, normalize: bool = True) -> Array:
@@ -66,6 +66,27 @@ def plot_intensity(
         cmap=cmap,
         vmin=vmin if log else None,
         vmax=vmax if log else None,
+        interpolation="antialiased",
+        interpolation_stage="rgba",
+    )
+    if title:
+        ax.set_title(title)
+    ax.set_xlabel("x [m]")
+    ax.set_ylabel("y [m]")
+    return im
+
+
+def plot_rgb(ax, rgb: Array, grid: Grid, *, title: Optional[str] = None):
+    """Draw an ``(H, W, 3)`` sRGB image on a matplotlib axis.
+
+    Companion to :func:`plot_intensity` for polychromatic results (see
+    :func:`diffraction.polychromatic.propagate_polychromatic`).
+    """
+    x, y = grid
+    im = ax.imshow(
+        np.clip(rgb, 0.0, 1.0),
+        extent=[x.min(), x.max(), y.min(), y.max()],
+        origin="lower",
         interpolation="antialiased",
         interpolation_stage="rgba",
     )
