@@ -14,14 +14,14 @@ extra plane in the sweep costs a single inverse transform.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 
 from .asm import AngularSpectrum
 from .backend import asnumpy
 from .field import Field
-from .grids import Array
+from .grids import Array, Grid
 
 __all__ = ["LongitudinalSection", "longitudinal_field"]
 
@@ -57,6 +57,8 @@ def longitudinal_field(
     n: float = 1.0,
     axis: str = "x",
     offset: float = 0.0,
+    output_half_width: Optional[float] = None,
+    output_samples: int = 512,
     pad_factor: int = 1,
     bandlimit: bool = True,
     normalize: bool = True,
@@ -84,7 +86,19 @@ def longitudinal_field(
         Transverse axis to slice. ``"x"`` holds ``y = offset`` and varies ``x``.
     offset : float
         Position [m] on the perpendicular axis at which to take the line
-        (default the optical axis, ``0``).
+        (default the optical axis, ``0``). With the native sampling this snaps
+        to the nearest grid line; with ``output_half_width`` it is evaluated
+        exactly.
+    output_half_width : float, optional
+        Half-width [m] of a *decoupled* transverse output window. When given,
+        each plane is sampled on a line of ``output_samples`` points spanning
+        ``±output_half_width`` (via :class:`~diffraction.asm.AngularSpectrum`'s
+        matrix-DFT output grid) instead of the input grid — e.g. to resolve a
+        focal waist far finer than the input spacing without enlarging the
+        input ``N``. As everywhere in the package, this decouples *output*
+        sampling only: the input grid must still sample the field adequately.
+    output_samples : int
+        Number of transverse samples when ``output_half_width`` is given.
     pad_factor : int
         Zero-padding passed to :class:`~diffraction.asm.AngularSpectrum` to
         suppress FFT wrap-around. Leave at ``1`` for a periodic grating whose
@@ -107,22 +121,39 @@ def longitudinal_field(
     xline = asnumpy(grid.x[0, :])
     yline = asnumpy(grid.y[:, 0])
 
-    prop = AngularSpectrum(
-        field, wavelength=wavelength, n=n, pad_factor=pad_factor, bandlimit=bandlimit
-    )
-
-    if axis == "x":
-        idx = int(np.argmin(np.abs(yline - offset)))
-        t = xline
+    if output_half_width is not None:
+        # Decoupled transverse sampling: a line output grid through `offset`,
+        # evaluated per plane by the precomputed matrix DFT.
+        if output_half_width <= 0:
+            raise ValueError("output_half_width must be positive.")
+        if output_samples < 2:
+            raise ValueError("output_samples must be at least 2.")
+        t = np.linspace(-output_half_width, output_half_width, output_samples)
+        if axis == "x":
+            line_grid = Grid(t[None, :], np.full((1, t.size), float(offset)))
+        else:
+            line_grid = Grid(np.full((t.size, 1), float(offset)), t[:, None])
+        prop = AngularSpectrum(
+            field, wavelength=wavelength, n=n, output_grid=line_grid,
+            pad_factor=pad_factor, bandlimit=bandlimit,
+        )
+        take = (lambda U: U[0, :]) if axis == "x" else (lambda U: U[:, 0])
     else:
-        idx = int(np.argmin(np.abs(xline - offset)))
-        t = yline
+        prop = AngularSpectrum(
+            field, wavelength=wavelength, n=n, pad_factor=pad_factor, bandlimit=bandlimit
+        )
+        if axis == "x":
+            idx = int(np.argmin(np.abs(yline - offset)))
+            t = xline
+        else:
+            idx = int(np.argmin(np.abs(xline - offset)))
+            t = yline
+        take = (lambda U: U[idx, :]) if axis == "x" else (lambda U: U[:, idx])
 
     zs = np.asarray([float(z) for z in zs], dtype=float)
     rows = np.empty((zs.size, t.size), dtype=float)
     for i, z in enumerate(zs):
-        U = prop.propagate(float(z)).values
-        line = asnumpy(U[idx, :] if axis == "x" else U[:, idx])
+        line = asnumpy(take(prop.propagate(float(z)).values))
         rows[i] = np.abs(line) ** 2
 
     if normalize:

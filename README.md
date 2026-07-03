@@ -85,7 +85,9 @@ applied to a field (`FT2`, `IFT2`), not methods on it.
   sweeps a field through a range of distances and slices a transverse line at
   each plane to build an `x–z` (or `y–z`) cross-section — a lens's focusing
   cone, a beam waist, or a grating's Talbot self-imaging carpet — drawn with
-  `plot_longitudinal`.
+  `plot_longitudinal`. Pass `output_half_width`/`output_samples` to sample the
+  line on a decoupled window (matrix-DFT), resolving e.g. a focal waist far
+  finer than the input spacing without enlarging the input `N`.
 - **Helpers** — `make_grid` for FFT-friendly sampling grids and
   `plot_intensity` for quick log-intensity figures.
 
