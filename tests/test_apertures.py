@@ -6,6 +6,8 @@ from diffraction import (
     antialiased,
     circular_aperture,
     elliptical_aperture,
+    lattice_aperture,
+    lattice_sites,
     make_grid,
     rectangular_aperture,
     slit_aperture,
@@ -89,3 +91,43 @@ def test_slit_aperture():
 
     with pytest.raises(ValueError):
         slit_aperture(X, Y, 0.2, orientation="diagonal")
+
+
+def test_lattice_sites_count_and_centering():
+    sq = lattice_sites(0.1, lattice="square", size=(3, 4))
+    assert sq.shape == (12, 2)
+    np.testing.assert_allclose(sq.mean(axis=0), [0.0, 0.0], atol=1e-12)
+    hx = lattice_sites(0.1, lattice="hexagonal", size=(4, 4))
+    assert hx.shape == (16, 2)
+    # hex row height is a√3/2
+    ys = np.unique(hx[:, 1].round(9))
+    np.testing.assert_allclose(np.diff(ys), 0.1 * np.sqrt(3) / 2, atol=1e-9)
+
+
+def test_lattice_sites_validation():
+    with pytest.raises(ValueError):
+        lattice_sites(-1.0)
+    with pytest.raises(ValueError):
+        lattice_sites(0.1, lattice="triangular")
+    with pytest.raises(ValueError):
+        lattice_sites(0.1, size=(0, 3))
+
+
+def test_lattice_aperture_area_and_centering():
+    R = 0.03
+    mask = lattice_aperture(X, Y, circular_aperture, 0.3, lattice="square", size=(3, 3), R=R)
+    # nine well-separated holes -> total area ~ 9 π R²
+    area = mask.sum() * DX * DX
+    np.testing.assert_allclose(area, 9 * np.pi * R**2, rtol=5e-2)
+    # the pattern is centered on the origin (centroid within a pixel)
+    total = mask.sum()
+    np.testing.assert_allclose((X * mask).sum() / total, 0.0, atol=DX)
+    np.testing.assert_allclose((Y * mask).sum() / total, 0.0, atol=DX)
+
+
+def test_lattice_aperture_composes_with_antialiased():
+    from diffraction import Field
+
+    field = antialiased(lattice_aperture, GRID, circular_aperture, 0.4, size=(2, 2), R=0.05)
+    assert isinstance(field, Field)
+    assert np.all((field.values.real >= 0.0) & (field.values.real <= 1.0))
