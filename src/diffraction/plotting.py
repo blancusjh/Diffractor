@@ -8,8 +8,9 @@ import numpy as np
 
 from .field import Field
 from .grids import Array, Grid
+from .longitudinal import LongitudinalSection
 
-__all__ = ["intensity", "plot_intensity", "plot_rgb"]
+__all__ = ["intensity", "plot_intensity", "plot_longitudinal", "plot_rgb"]
 
 
 def intensity(U: Union[Field, Array], *, normalize: bool = True) -> Array:
@@ -73,6 +74,46 @@ def plot_intensity(
         ax.set_title(title)
     ax.set_xlabel("x [m]")
     ax.set_ylabel("y [m]")
+    return im
+
+
+def plot_longitudinal(
+    ax,
+    section: LongitudinalSection,
+    *,
+    title: Optional[str] = None,
+    log: bool = True,
+    vmin: float = -4.0,
+    vmax: float = 0.0,
+    cmap: str = "inferno",
+):
+    """Draw an axial (``x–z``/``y–z``) intensity cross-section.
+
+    Propagation distance ``z`` runs along the horizontal axis and the sliced
+    transverse coordinate along the vertical, so a focusing cone, a beam waist,
+    or a grating's Talbot carpet reads directly off the image. Takes the
+    :class:`~diffraction.longitudinal.LongitudinalSection` returned by
+    :func:`~diffraction.longitudinal.longitudinal_field`.
+    """
+    data = section.intensity.T  # (n_t, n_z): transverse vertical, z horizontal
+    peak = data.max()
+    norm = data / peak if peak > 0 else data
+    shown = np.log10(norm + 10.0 ** (vmin - 4)) if log else norm
+    im = ax.imshow(
+        shown,
+        extent=[section.z.min(), section.z.max(), section.t.min(), section.t.max()],
+        origin="lower",
+        aspect="auto",  # z and transverse scales differ by orders of magnitude
+        cmap=cmap,
+        vmin=vmin if log else None,
+        vmax=vmax if log else None,
+        interpolation="antialiased",
+        interpolation_stage="rgba",
+    )
+    if title:
+        ax.set_title(title)
+    ax.set_xlabel("z [m]")
+    ax.set_ylabel(f"{section.axis} [m]")
     return im
 
 
