@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import j0
 
-from diffraction import CartesianSurface, LongitudinalSection, ParabolicSurface, plot_longitudinal
+from diffractor import CartesianSurface, LongitudinalSection, ParabolicSurface, plot_longitudinal
 
 N1, N2 = 1.0, 1.5
 ZO, ZI = -0.1, 12.0e-3  # object / image distances [m] (object ~collimated)

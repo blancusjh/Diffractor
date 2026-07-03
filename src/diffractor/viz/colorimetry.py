@@ -23,7 +23,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from .grids import Array
+from ..mathutils.grids import Array
 
 __all__ = [
     "cie_xyz",

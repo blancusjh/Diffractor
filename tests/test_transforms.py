@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from diffraction import FFT2, FT2, IFFT2, IFT2, Field, Grid, frequency_grid, make_grid
+from diffractor import FFT2, FT2, IFFT2, IFT2, Field, Grid, frequency_grid, make_grid
 
 try:
     import scipy.signal  # noqa: F401

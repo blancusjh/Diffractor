@@ -30,9 +30,9 @@ from typing import Callable, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from .field import Field
+from ..physics.field import Field
 from .grids import Grid, make_grid
-from .propagation import asm_propagator
+from ..physics.propagation import asm_propagator
 
 __all__ = [
     "GridRecommendation",

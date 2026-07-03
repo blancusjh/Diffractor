@@ -6,10 +6,10 @@ from typing import Optional, Union
 
 import numpy as np
 
-from .field import Field
-from .grids import Array, Grid
-from .longitudinal import LongitudinalSection
-from .polychromatic import RGBLongitudinalSection
+from ..physics.field import Field
+from ..mathutils.grids import Array, Grid
+from ..physics.longitudinal import LongitudinalSection
+from ..physics.polychromatic import RGBLongitudinalSection
 
 __all__ = [
     "intensity",
@@ -100,8 +100,8 @@ def plot_longitudinal(
     Propagation distance ``z`` runs along the horizontal axis and the sliced
     transverse coordinate along the vertical, so a focusing cone, a beam waist,
     or a grating's Talbot carpet reads directly off the image. Takes the
-    :class:`~diffraction.longitudinal.LongitudinalSection` returned by
-    :func:`~diffraction.longitudinal.longitudinal_field`.
+    :class:`~diffractor.physics.longitudinal.LongitudinalSection` returned by
+    :func:`~diffractor.physics.longitudinal.longitudinal_field`.
 
     ``normalize`` (default ``True``) rescales the section by its own peak so a
     single ``vmin``/``vmax`` spans it. Pass ``normalize=False`` to show the
@@ -139,8 +139,8 @@ def plot_rgb_longitudinal(
     Propagation distance ``z`` runs along the horizontal axis and the sliced
     transverse coordinate along the vertical, matching :func:`plot_longitudinal`'s
     layout — the polychromatic counterpart, for the
-    :class:`~diffraction.polychromatic.RGBLongitudinalSection` returned by
-    :func:`~diffraction.polychromatic.propagate_polychromatic_longitudinal`.
+    :class:`~diffractor.physics.polychromatic.RGBLongitudinalSection` returned by
+    :func:`~diffractor.physics.polychromatic.propagate_polychromatic_longitudinal`.
     """
     shown = np.clip(section.rgb, 0.0, 1.0).transpose(1, 0, 2)  # (n_t, n_z, 3)
     im = ax.imshow(
@@ -162,7 +162,7 @@ def plot_rgb(ax, rgb: Array, grid: Grid, *, title: Optional[str] = None):
     """Draw an ``(H, W, 3)`` sRGB image on a matplotlib axis.
 
     Companion to :func:`plot_intensity` for polychromatic results (see
-    :func:`diffraction.polychromatic.propagate_polychromatic`).
+    :func:`diffractor.physics.polychromatic.propagate_polychromatic`).
     """
     x, y = grid
     im = ax.imshow(

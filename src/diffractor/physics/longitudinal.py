@@ -6,7 +6,7 @@ intensity. This is the standard way to *see* propagation itself: a lens's
 focusing cone and focal waist, a beam's Rayleigh range, or a periodic grating's
 Talbot self-imaging carpet.
 
-The heavy lifting is done by :class:`~diffraction.asm.AngularSpectrum`, which
+The heavy lifting is done by :class:`~diffractor.physics.asm.AngularSpectrum`, which
 precomputes the transfer-function machinery and the input FFT once, so every
 extra plane in the sweep costs a single inverse transform.
 """
@@ -19,9 +19,9 @@ from typing import Optional, Sequence
 import numpy as np
 
 from .asm import AngularSpectrum
-from .backend import asnumpy
+from ..mathutils.backend import asnumpy
 from .field import Field
-from .grids import Array, Grid
+from ..mathutils.grids import Array, Grid
 
 __all__ = ["LongitudinalSection", "longitudinal_field"]
 
@@ -92,7 +92,7 @@ def longitudinal_field(
     output_half_width : float, optional
         Half-width [m] of a *decoupled* transverse output window. When given,
         each plane is sampled on a line of ``output_samples`` points spanning
-        ``±output_half_width`` (via :class:`~diffraction.asm.AngularSpectrum`'s
+        ``±output_half_width`` (via :class:`~diffractor.physics.asm.AngularSpectrum`'s
         matrix-DFT output grid) instead of the input grid — e.g. to resolve a
         focal waist far finer than the input spacing without enlarging the
         input ``N``. As everywhere in the package, this decouples *output*
@@ -100,7 +100,7 @@ def longitudinal_field(
     output_samples : int
         Number of transverse samples when ``output_half_width`` is given.
     pad_factor : int
-        Zero-padding passed to :class:`~diffraction.asm.AngularSpectrum` to
+        Zero-padding passed to :class:`~diffractor.physics.asm.AngularSpectrum` to
         suppress FFT wrap-around. Leave at ``1`` for a periodic grating whose
         window spans an integer number of periods (the wrap is then physical).
     bandlimit : bool

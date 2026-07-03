@@ -4,7 +4,7 @@ The numerical core is written against the NumPy API. CuPy exposes the same
 API on NVIDIA GPUs, so backend-aware code paths run unchanged on either device
 by resolving the *array module* (``numpy`` or ``cupy``) from the arrays they
 are given. This module centralizes that resolution and the host/device
-transfers. The GPU-capable entry points are :class:`~diffraction.asm.AngularSpectrum`
+transfers. The GPU-capable entry points are :class:`~diffractor.physics.asm.AngularSpectrum`
 (the batched propagation engine, built for device execution) and the array
 operators ``FFT2`` / ``IFFT2``; the one-shot functional propagators are
 NumPy-first.

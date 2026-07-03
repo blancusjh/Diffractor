@@ -1,7 +1,7 @@
 """Source fields.
 
 Helpers that build common input fields on a sampling grid, returned as
-:class:`~diffraction.field.Field` objects ready to feed the propagators.
+:class:`~diffractor.physics.field.Field` objects ready to feed the propagators.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Tuple
 import numpy as np
 
 from .field import Field
-from .grids import Grid
+from ..mathutils.grids import Grid
 
 __all__ = ["gaussian_beam", "plane_wave"]
 

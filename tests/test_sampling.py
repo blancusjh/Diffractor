@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from diffraction import (
-    antialiased,
+from diffractor import (
+    MonochromaticField,
     circular_aperture,
     fresnel_max_spacing,
     fresnel_min_distance,
@@ -60,7 +60,8 @@ def test_convergence_recommends_finer_grid_for_near_field():
     # The debugging-session config (R=0.3mm, 532nm, L=6mm) at z=0.05 needs a
     # fine grid; the tool should recommend N >= 1024 (kept small/fast here).
     def aperture(grid):
-        return antialiased(circular_aperture, grid, 0.3e-3)
+        return MonochromaticField(grid, 1.0).add_aperture(
+            circular_aperture, 0.3e-3, antialiased=True).to_field()
 
     rec = recommend_grid_convergence(
         aperture,
@@ -84,8 +85,8 @@ def test_convergence_recommends_finer_grid_for_near_field():
 def test_convergence_successive_diff_converges_in_free_space():
     # A smooth Gaussian-like soft aperture converges quickly.
     def aperture(grid):
-        x, y = grid
-        return antialiased(circular_aperture, grid, 1.0e-3)
+        return MonochromaticField(grid, 1.0).add_aperture(
+            circular_aperture, 1.0e-3, antialiased=True).to_field()
 
     rec = recommend_grid_convergence(
         aperture,
@@ -104,7 +105,8 @@ def test_convergence_successive_diff_converges_in_free_space():
 
 def test_convergence_validation():
     def aperture(grid):
-        return antialiased(circular_aperture, grid, 0.3e-3)
+        return MonochromaticField(grid, 1.0).add_aperture(
+            circular_aperture, 0.3e-3, antialiased=True).to_field()
 
     with pytest.raises(ValueError):
         recommend_grid_convergence(aperture, length=-1.0, wavelength=532e-9, z=0.05)

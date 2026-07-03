@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from diffraction import (
+from diffractor import (
     Field,
     LongitudinalSection,
+    MonochromaticField,
     RGBLongitudinalSection,
-    antialiased,
     circular_aperture,
     intensity,
     make_grid,
@@ -41,7 +41,8 @@ def test_intensity_normalizes_to_unit_peak():
 
 def test_plot_intensity_log_floor_and_extent(ax):
     grid = make_grid(64, 2e-3)
-    U = antialiased(circular_aperture, grid, 0.5e-3)
+    U = MonochromaticField(grid, 1.0).add_aperture(
+        circular_aperture, 0.5e-3, antialiased=True).to_field()
     im = plot_intensity(ax, U, vmin=-4.0)
     # the display range is clipped to the requested decade window
     assert im.get_clim() == (-4.0, 0.0)

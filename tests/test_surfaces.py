@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from diffraction import (
+from diffractor import (
     CartesianSurface,
     Field,
     ParabolicSurface,

@@ -1,6 +1,6 @@
 """Reusable, batched angular-spectrum propagator.
 
-:func:`diffraction.propagation.asm_propagator` is a stateless one-shot call:
+:func:`diffractor.physics.propagation.asm_propagator` is a stateless one-shot call:
 it rebuilds the transfer-function machinery on every invocation. When the same
 field is propagated to *many* distances — a focal z-sweep, a movie, a depth
 stack — that rebuild dominates the cost.
@@ -24,9 +24,9 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 
-from .backend import array_module, asnumpy, resolve_module
+from ..mathutils.backend import array_module, asnumpy, resolve_module
 from .field import Field
-from .grids import Array, Grid
+from ..mathutils.grids import Array, Grid
 
 __all__ = ["AngularSpectrum"]
 
@@ -201,14 +201,14 @@ class AngularSpectrum:
 
         Convenience for building z-sweep animations: returns real-valued
         frames moved back to the host (``to_cpu=True``) so they can be handed
-        straight to :func:`diffraction.viz.animate` or matplotlib.
+        straight to :func:`diffractor.viz.viewers.animate` or matplotlib.
 
         ``normalize`` selects the scaling: ``True`` (default) peak-normalizes
         each frame *individually* — every plane uses the full display range,
         but relative brightness between planes is lost; ``"global"`` divides
         the whole stack by its single maximum, preserving how a focus
         brightens through the sweep (matching
-        :func:`~diffraction.longitudinal.longitudinal_field`); ``False``
+        :func:`~diffractor.physics.longitudinal.longitudinal_field`); ``False``
         returns raw ``|U|²``.
         """
         if normalize not in (True, False, "global"):

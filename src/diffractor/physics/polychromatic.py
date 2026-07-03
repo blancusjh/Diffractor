@@ -3,7 +3,7 @@
 A broadband field is just many monochromatic fields. This module propagates a
 source at each wavelength onto a **shared** output grid and composites the
 per-wavelength intensities into an sRGB image with
-:mod:`diffraction.colorimetry`.
+:mod:`diffractor.viz.colorimetry`.
 
 Using a shared, wavelength-independent output grid is what makes this clean:
 ``fresnel_zoom_propagator`` and ``asm_propagator(..., output_grid=...)`` both
@@ -21,13 +21,16 @@ from typing import Callable, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from .colorimetry import spectrum_to_srgb
+from ..viz.colorimetry import spectrum_to_srgb
 from .field import Field
-from .grids import Array, Grid
+from ..mathutils.grids import Array, Grid
 from .longitudinal import longitudinal_field
+from .monochromatic import MonochromaticField
 from .propagation import asm_propagator, fresnel_zoom_propagator
 
 __all__ = [
+    "PolychromaticField",
+    "PolychromaticImage",
     "RGBLongitudinalSection",
     "propagate_polychromatic",
     "propagate_polychromatic_longitudinal",
@@ -68,7 +71,7 @@ def propagate_polychromatic(
     field_of : Field or callable
         The input field. Pass a single ``Field`` for a wavelength-independent
         source (an amplitude mask), or a callable ``λ [m] -> Field`` for a
-        chromatic element (e.g. a :func:`~diffraction.gratings.phase_grating`).
+        chromatic element (e.g. a :func:`~diffractor.physics.gratings.phase_grating`).
     wavelengths : sequence of float
         Wavelengths [m] to sample across the band.
     z : float
@@ -87,7 +90,7 @@ def propagate_polychromatic(
     output_half_width, output_samples :
         Convenience square output window for ``"fresnel_zoom"``.
     gamut : {"desaturate", "clip"}
-        Out-of-gamut handling in :func:`~diffraction.colorimetry.xyz_to_srgb`.
+        Out-of-gamut handling in :func:`~diffractor.viz.colorimetry.xyz_to_srgb`.
     pad_factor : int
         ``pad_factor`` for the ASM propagator (ignored by fresnel_zoom).
 
@@ -193,15 +196,15 @@ def propagate_polychromatic_longitudinal(
     """Broadband axial (``x–z``/``y–z``) cross-section, composited to sRGB.
 
     The polychromatic counterpart of
-    :func:`~diffraction.longitudinal.longitudinal_field`: propagates the
+    :func:`~diffractor.physics.longitudinal.longitudinal_field`: propagates the
     (possibly chromatic) field at every wavelength through the same z-sweep and
     transverse line, then composites the per-wavelength ``|U|²`` maps into a
-    true-color longitudinal image with :mod:`diffraction.colorimetry` — e.g. a
+    true-color longitudinal image with :mod:`diffractor.viz.colorimetry` — e.g. a
     white-light focusing cone, where each wavelength's own diffraction-limited
     scale (∝ λ) shows up as color fringing, or a grating's colored Talbot
     carpet.
 
-    Parameters mirror :func:`~diffraction.longitudinal.longitudinal_field`
+    Parameters mirror :func:`~diffractor.physics.longitudinal.longitudinal_field`
     (``n``, ``axis``, ``offset``, ``output_half_width``, ``output_samples``,
     ``pad_factor``, ``bandlimit``) plus :func:`propagate_polychromatic`'s color
     controls (``weights``, ``gamut``, ``saturation``, ``stretch``,
@@ -254,3 +257,194 @@ def propagate_polychromatic_longitudinal(
         brightness=brightness,
     )
     return RGBLongitudinalSection(rgb=rgb, z=z_arr, t=t_arr, axis=axis)
+
+
+@dataclass(frozen=True)
+class PolychromaticImage:
+    """A rendered broadband image: an sRGB array on its shared output grid.
+
+    Returned by :meth:`PolychromaticField.propagate`. ``plot`` draws it on a
+    matplotlib axis via :func:`~diffractor.viz.plotting.plot_rgb`.
+    """
+
+    rgb: Array
+    grid: Grid
+
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        """Shape of the RGB array ``(H, W, 3)``."""
+        return self.rgb.shape
+
+    def plot(self, ax=None, **kwargs):
+        """Draw the sRGB image on a matplotlib axis (creates one if None)."""
+        from ..viz.plotting import plot_rgb  # lazy: matplotlib optional
+
+        if ax is None:
+            import matplotlib.pyplot as plt
+
+            _, ax = plt.subplots(constrained_layout=True)
+        plot_rgb(ax, self.rgb, self.grid, **kwargs)
+        return ax
+
+
+class PolychromaticField:
+    """A broadband field with the same fluent building API as
+    :class:`~diffractor.physics.monochromatic.MonochromaticField`.
+
+    Where a ``MonochromaticField`` carries a single ``wavelength``, a
+    ``PolychromaticField`` carries an array of ``wavelengths`` (and optional
+    spectral ``weights``). The ``add_*`` builder methods are **recorded** and
+    replayed on a fresh ``MonochromaticField`` at *each* wavelength when you
+    propagate, so wavelength-dependent elements (``add_lens``, ``add_surface``,
+    ``add_phase_grating``) automatically get their correct per-λ phase while
+    amplitude masks stay wavelength-independent. Propagation composites the
+    per-wavelength intensities to an sRGB image through the CIE 1931
+    color-matching functions.
+
+    Parameters
+    ----------
+    grid : Grid
+        Sampling grid the field lives on.
+    source : callable, scalar, array or Field
+        What defines the field on the grid, as for ``MonochromaticField``.
+    wavelengths : sequence of float
+        Wavelengths [m] to sample across the band.
+    weights : sequence of float, optional
+        Spectral power at each wavelength (e.g. ``d65_weights(wl * 1e9)``).
+        Defaults to flat.
+    n : float
+        Refractive index of the medium the field currently sits in.
+
+    Examples
+    --------
+    >>> img = (PolychromaticField(grid, 1.0, wavelengths=wl, weights=d65_weights(wl * 1e9))
+    ...        .add_aperture(polygon_aperture, 6, 0.5e-3, antialiased=True)
+    ...        .propagate(0.3, method="fresnel_zoom", output_half_width=2e-3))
+    >>> img.plot(ax)
+    """
+
+    def __init__(
+        self,
+        grid: Grid,
+        source=1.0,
+        *,
+        wavelengths: Sequence[float],
+        weights: Optional[Sequence[float]] = None,
+        n: float = 1.0,
+    ) -> None:
+        if n <= 0:
+            raise ValueError("n must be positive.")
+        wl = np.asarray([float(w) for w in wavelengths], dtype=float)
+        if wl.size == 0:
+            raise ValueError("wavelengths is empty.")
+        if np.any(wl <= 0):
+            raise ValueError("wavelengths must be positive.")
+        self.grid = grid
+        self.wavelengths = wl
+        self.weights = None if weights is None else np.asarray(weights, dtype=float)
+        self.n = n
+        self._source = source
+        self._ops: list = []  # recorded (method_name, args, kwargs) to replay per-λ
+
+    # -- recording -------------------------------------------------------------
+    def _record(self, name: str, args: tuple, kwargs: dict) -> "PolychromaticField":
+        self._ops.append((name, args, kwargs))
+        return self
+
+    def field_at(self, wavelength: float) -> Field:
+        """The built (pre-propagation) :class:`Field` at a single wavelength."""
+        mf = MonochromaticField(self.grid, self._source, wavelength=float(wavelength), n=self.n)
+        for name, args, kwargs in self._ops:
+            getattr(mf, name)(*args, **kwargs)
+        return mf.to_field()
+
+    # -- field building (mirror MonochromaticField; chainable) ----------------
+    def add_aperture(self, aperture, *params, **kwargs) -> "PolychromaticField":
+        """Record an aperture mask (see ``MonochromaticField.add_aperture``)."""
+        return self._record("add_aperture", (aperture, *params), kwargs)
+
+    def add_grating(self, grating, *params, **kwargs) -> "PolychromaticField":
+        """Record an amplitude grating (see ``MonochromaticField.add_grating``)."""
+        return self._record("add_grating", (grating, *params), kwargs)
+
+    def add_phase_grating(self, **kwargs) -> "PolychromaticField":
+        """Record a chromatic phase grating, evaluated per wavelength."""
+        return self._record("add_phase_grating", (), kwargs)
+
+    def add_lens(self, focal_length: float, **kwargs) -> "PolychromaticField":
+        """Record a thin lens, whose phase scales with 1/λ per wavelength."""
+        return self._record("add_lens", (focal_length,), kwargs)
+
+    def add_surface(self, surface, **kwargs) -> "PolychromaticField":
+        """Record a refracting surface, evaluated per wavelength."""
+        return self._record("add_surface", (surface,), kwargs)
+
+    def add_phase(self, phase) -> "PolychromaticField":
+        """Record a (wavelength-independent) phase screen ``exp(i·phase)``."""
+        return self._record("add_phase", (phase,), {})
+
+    def multiply(self, mask) -> "PolychromaticField":
+        """Record a generic (wavelength-independent) multiplicative mask."""
+        return self._record("multiply", (mask,), {})
+
+    # -- propagation (returns rendered results) -------------------------------
+    def propagate(
+        self,
+        z: float,
+        *,
+        method: str = "fresnel_zoom",
+        weights: Optional[Sequence[float]] = None,
+        **kwargs,
+    ) -> PolychromaticImage:
+        """Propagate every wavelength to ``z`` and composite to an sRGB image.
+
+        Parameters
+        ----------
+        z : float
+            Propagation distance [m].
+        method : {"fresnel_zoom", "asm"}
+            Shared-output-grid propagator (single-FFT methods are not offered:
+            their output grid scales with λ). Default ``"fresnel_zoom"``.
+        weights : sequence of float, optional
+            Override the field's spectral weights for this call.
+        **kwargs :
+            Forwarded to :func:`propagate_polychromatic` (``output_half_width``,
+            ``output_samples``, ``output_grid``, ``gamut``, ``saturation``,
+            ``stretch``, ``brightness``, ``pad_factor``).
+
+        Returns
+        -------
+        PolychromaticImage
+            The rendered sRGB image and its shared output grid.
+        """
+        w = self.weights if weights is None else np.asarray(weights, dtype=float)
+        rgb, out_grid = propagate_polychromatic(
+            self.field_at, self.wavelengths, z,
+            weights=w, n=self.n, propagator=method, **kwargs,
+        )
+        return PolychromaticImage(rgb=rgb, grid=out_grid)
+
+    def longitudinal(
+        self,
+        zs: Sequence[float],
+        *,
+        axis: str = "x",
+        weights: Optional[Sequence[float]] = None,
+        **kwargs,
+    ) -> RGBLongitudinalSection:
+        """Broadband axial (``x–z``/``y–z``) cross-section, composited to sRGB.
+
+        Thin wrapper over :func:`propagate_polychromatic_longitudinal` using the
+        field's stored wavelengths, weights and ``n``.
+        """
+        w = self.weights if weights is None else np.asarray(weights, dtype=float)
+        return propagate_polychromatic_longitudinal(
+            self.field_at, self.wavelengths, zs,
+            n=self.n, axis=axis, weights=w, **kwargs,
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"PolychromaticField(shape={self.grid.shape}, "
+            f"n_wavelengths={self.wavelengths.size}, n={self.n})"
+        )

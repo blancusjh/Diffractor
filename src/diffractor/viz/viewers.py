@@ -11,11 +11,11 @@ raster path becomes sluggish:
 
 VisPy (and a GUI backend such as PyQt6) is an optional dependency; install the
 ``viz`` extra. The functions import VisPy lazily and raise a clear error if it
-is missing, so importing :mod:`diffraction` never requires it.
+is missing, so importing :mod:`diffractor` never requires it.
 
 Each viewer takes a real 2D array (an intensity map or any scalar field). Pass
 ``log_scale=True`` to display ``log10`` of the data, or pre-transform it with
-:func:`diffraction.plotting.intensity`.
+:func:`diffractor.viz.plotting.intensity`.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def _require_vispy():
     except Exception as exc:  # pragma: no cover - depends on optional install
         raise ImportError(
             "This viewer needs VisPy and a GUI backend. Install the 'viz' "
-            "extra, e.g. `pip install \"diffraction[viz]\"` or "
+            "extra, e.g. `pip install \"diffractor[viz]\"` or "
             "`pip install vispy PyQt6`."
         ) from exc
     from vispy import app, scene

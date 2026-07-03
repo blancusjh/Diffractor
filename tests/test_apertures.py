@@ -1,9 +1,8 @@
 import numpy as np
 import pytest
 
-from diffraction import (
+from diffractor import (
     annular_aperture,
-    antialiased,
     circular_aperture,
     elliptical_aperture,
     lattice_aperture,
@@ -15,6 +14,10 @@ from diffraction import (
     slit_aperture,
     square_aperture,
 )
+
+# `antialiased` is the internal area-coverage helper behind
+# MonochromaticField.add_aperture(..., antialiased=True); unit-tested directly.
+from diffractor.physics.apertures import antialiased
 
 GRID = make_grid(256, 2.0)
 X, Y = GRID
@@ -68,7 +71,7 @@ def test_antialiased_area_is_more_accurate():
 
 
 def test_antialiased_returns_field_and_kwargs():
-    from diffraction import Field
+    from diffractor import Field
 
     field = antialiased(circular_aperture, GRID, 0.5, center=(0.1, 0.0))
     assert isinstance(field, Field)
@@ -128,7 +131,7 @@ def test_lattice_aperture_area_and_centering():
 
 
 def test_lattice_aperture_composes_with_antialiased():
-    from diffraction import Field
+    from diffractor import Field
 
     field = antialiased(lattice_aperture, GRID, circular_aperture, 0.4, size=(2, 2), R=0.05)
     assert isinstance(field, Field)
@@ -186,7 +189,7 @@ def test_nslit_aperture_geometry():
 
 
 def test_nslit_aperture_double_slit_fringe_spacing():
-    from diffraction import Field, fresnel_zoom_propagator
+    from diffractor import Field, fresnel_zoom_propagator
 
     L, N, wavelength, z, d, w = 6e-3, 1024, 550e-9, 1.0, 0.2e-3, 0.03e-3
     grid = make_grid(N, L)

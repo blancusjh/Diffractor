@@ -8,7 +8,7 @@ CuPy and a CUDA GPU are present the entire batch runs on the device.
 
 Two viewing paths:
   * VisPy (the ``viz`` extra) → an interactive movie with play/pause and
-    frame-stepping (diffraction.viz.animate).
+    frame-stepping (diffractor.viz.viewers.animate).
   * matplotlib fallback → a static montage of a few planes.
 
 Run with:  python examples/asm_zsweep_animation.py
@@ -16,10 +16,10 @@ Run with:  python examples/asm_zsweep_animation.py
 
 import numpy as np
 
-from diffraction import (
+from diffractor import (
     AngularSpectrum,
     CUPY_AVAILABLE,
-    antialiased,
+    MonochromaticField,
     circular_aperture,
     make_grid,
 )
@@ -39,15 +39,18 @@ Z_MIN, Z_MAX, N_FRAMES = 0.05, 0.16, 40
 
 def main() -> None:
     grid = make_grid(N, L)
-    U0 = antialiased(circular_aperture, grid, RADIUS)
+    U0 = MonochromaticField(grid, 1.0, wavelength=WAVELENGTH).add_aperture(
+        circular_aperture, RADIUS, antialiased=True
+    )
+    field = U0.to_field()
 
     device = "gpu" if CUPY_AVAILABLE else "cpu"
     if device == "gpu":
-        U0 = U0.to("gpu")
+        field = field.to("gpu")
     tag = "[GPU]" if device == "gpu" else "[CPU]"
     print(f"Propagating a {N_FRAMES}-plane z-sweep on the {device.upper()} {tag}")
 
-    prop = AngularSpectrum(U0, wavelength=WAVELENGTH, pad_factor=2)
+    prop = AngularSpectrum(field, wavelength=WAVELENGTH, pad_factor=2)
     zs = np.linspace(Z_MIN, Z_MAX, N_FRAMES)
 
     # log-intensity frames on the host, ready for display.
@@ -59,7 +62,7 @@ def main() -> None:
     extent_mm = [x.min() * 1e3, x.max() * 1e3, x.min() * 1e3, x.max() * 1e3]
 
     try:
-        from diffraction import animate
+        from diffractor import animate
 
         animate(
             frames,

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from diffraction import Grid, grid_spacing, make_grid
+from diffractor import Grid, grid_spacing, make_grid
 
 
 def test_make_grid_returns_grid():

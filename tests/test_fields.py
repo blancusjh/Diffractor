@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from diffraction import gaussian_beam, make_grid, plane_wave
+from diffractor import gaussian_beam, make_grid, plane_wave
 
 
 def test_gaussian_beam_profile():

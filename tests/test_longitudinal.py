@@ -1,22 +1,30 @@
 import numpy as np
 import pytest
 
-from diffraction import (
+from diffractor import (
     Field,
-    antialiased,
+    MonochromaticField,
     circular_aperture,
     longitudinal_field,
     make_grid,
     ronchi_grating,
-    thin_lens,
 )
 
 WL = 550e-9
 
 
+def _circ(grid, R, *, f=None, wl=WL):
+    """Antialiased circular aperture (optionally with a thin lens) as a Field."""
+    mf = MonochromaticField(grid, 1.0, wavelength=wl).add_aperture(
+        circular_aperture, R, antialiased=True)
+    if f is not None:
+        mf = mf.add_lens(f)
+    return mf.to_field()
+
+
 def test_section_shape_and_coordinates():
     grid = make_grid(256, 2e-3)
-    U0 = antialiased(circular_aperture, grid, 0.4e-3)
+    U0 = _circ(grid, 0.4e-3)
     zs = np.linspace(0.02, 0.05, 7)
     sec = longitudinal_field(U0, WL, zs, axis="x")
     assert sec.intensity.shape == (7, 256)
@@ -37,7 +45,7 @@ def test_plane_wave_stays_uniform_along_z():
 def test_lens_on_axis_intensity_peaks_at_focus():
     f = 0.08
     grid = make_grid(1024, 4e-3)
-    U0 = antialiased(circular_aperture, grid, 1.2e-3) * thin_lens(grid, f, WL)
+    U0 = _circ(grid, 1.2e-3, f=f)
     zs = np.linspace(0.5 * f, 1.5 * f, 61)
     sec = longitudinal_field(U0, WL, zs, axis="x")
     center = sec.t.size // 2
@@ -49,7 +57,7 @@ def test_lens_on_axis_intensity_peaks_at_focus():
 
 def test_axis_x_and_y_agree_for_rotationally_symmetric_input():
     grid = make_grid(512, 3e-3)
-    U0 = antialiased(circular_aperture, grid, 0.5e-3)
+    U0 = _circ(grid, 0.5e-3)
     zs = np.linspace(0.03, 0.09, 9)
     sx = longitudinal_field(U0, WL, zs, axis="x")
     sy = longitudinal_field(U0, WL, zs, axis="y")
@@ -81,7 +89,7 @@ def test_grating_self_images_at_talbot_distance():
 
 def test_axis_validation():
     grid = make_grid(64, 1e-3)
-    U0 = antialiased(circular_aperture, grid, 0.2e-3)
+    U0 = _circ(grid, 0.2e-3)
     with pytest.raises(ValueError):
         longitudinal_field(U0, WL, [0.01], axis="z")
 
@@ -90,7 +98,7 @@ def test_zoomed_line_matches_native_at_native_coordinates():
     # The decoupled output line evaluated exactly at the native x samples must
     # reproduce the native-FFT section (both are exact DFTs).
     grid = make_grid(128, 2e-3)
-    U0 = antialiased(circular_aperture, grid, 0.5e-3)
+    U0 = _circ(grid, 0.5e-3)
     zs = [0.03, 0.06]
     native = longitudinal_field(U0, WL, zs, axis="x", normalize=False)
     x = grid.x[0, :]
@@ -109,7 +117,7 @@ def test_zoomed_line_resolves_waist_below_native_spacing():
     # decoupled line must still resolve it (radius ~ 0.61 lambda f / R).
     f = 0.05
     grid = make_grid(256, 2e-3)  # dx ~ 7.8 um
-    U0 = antialiased(circular_aperture, grid, 0.7e-3) * thin_lens(grid, f, WL)
+    U0 = _circ(grid, 0.7e-3, f=f)
     airy_radius = 0.61 * WL * f / 0.7e-3  # ~ 2.4 um < dx
     sec = longitudinal_field(
         U0, WL, [f], axis="x",
@@ -126,7 +134,7 @@ def test_zoomed_line_resolves_waist_below_native_spacing():
 
 def test_zoom_validation():
     grid = make_grid(64, 1e-3)
-    U0 = antialiased(circular_aperture, grid, 0.2e-3)
+    U0 = _circ(grid, 0.2e-3)
     with pytest.raises(ValueError):
         longitudinal_field(U0, WL, [0.01], output_half_width=-1e-4)
     with pytest.raises(ValueError):

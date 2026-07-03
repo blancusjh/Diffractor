@@ -24,13 +24,11 @@ Run with:  python examples/lens_longitudinal_focus.py
 
 import numpy as np
 
-from diffraction import (
-    antialiased,
+from diffractor import (
+    MonochromaticField,
     circular_aperture,
-    longitudinal_field,
     make_grid,
     plot_longitudinal,
-    thin_lens,
 )
 
 N = 1024
@@ -47,15 +45,15 @@ N_PLANES_WAIST = 300
 def main() -> None:
     grid = make_grid(N, L)
     # A uniformly illuminated circular aperture immediately behind the lens.
-    aperture = antialiased(circular_aperture, grid, APERTURE_R)
-    lens = thin_lens(grid, FOCAL_LENGTH, WAVELENGTH)
-    U0 = aperture * lens
+    U0 = MonochromaticField(grid, 1.0, wavelength=WAVELENGTH).add_aperture(
+        circular_aperture, APERTURE_R, antialiased=True
+    ).add_lens(FOCAL_LENGTH)
 
     # Sweep from well before to well past the focus. The converging beam stays
     # well inside the window over this range, so no zero-padding is needed.
     zs = np.linspace(0.55 * FOCAL_LENGTH, 1.45 * FOCAL_LENGTH, N_PLANES_CONE)
-    section = longitudinal_field(
-        U0, WAVELENGTH, zs, axis="x", pad_factor=1,
+    section = U0.longitudinal(
+        zs, axis="x", pad_factor=1,
         output_half_width=CONE_HALF_WIDTH, output_samples=CONE_SAMPLES,
     )
 
@@ -63,8 +61,8 @@ def main() -> None:
     # Airy radius here is ~24 µm — only a few input pixels at dx ≈ 3.9 µm.
     airy_radius = 0.61 * WAVELENGTH * FOCAL_LENGTH / APERTURE_R
     zw = np.linspace(0.94 * FOCAL_LENGTH, 1.06 * FOCAL_LENGTH, N_PLANES_WAIST)
-    waist = longitudinal_field(
-        U0, WAVELENGTH, zw, axis="x", pad_factor=1,
+    waist = U0.longitudinal(
+        zw, axis="x", pad_factor=1,
         output_half_width=5.0 * airy_radius, output_samples=401,
     )
 

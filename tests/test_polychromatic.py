@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from diffraction import (
+from diffractor import (
     Field,
-    antialiased,
+    MonochromaticField,
     circular_aperture,
     make_grid,
     propagate_polychromatic,
@@ -15,7 +15,8 @@ from diffraction import (
 
 def _aperture():
     grid = make_grid(256, 4e-3)
-    return antialiased(circular_aperture, grid, 0.3e-3)
+    return MonochromaticField(grid, 1.0).add_aperture(
+        circular_aperture, 0.3e-3, antialiased=True).to_field()
 
 
 def test_returns_rgb_image_and_grid():
@@ -46,7 +47,8 @@ def test_single_wavelength_matches_its_color():
 
 def test_asm_propagator_path():
     grid = make_grid(256, 4e-3)
-    U0 = antialiased(circular_aperture, grid, 0.3e-3)
+    U0 = MonochromaticField(grid, 1.0).add_aperture(
+        circular_aperture, 0.3e-3, antialiased=True).to_field()
     wl = np.linspace(450e-9, 650e-9, 6)
     rgb, out_grid = propagate_polychromatic(
         U0, wl, z=0.02, propagator="asm", pad_factor=2
@@ -88,7 +90,7 @@ def test_asm_callable_with_fresh_grid_matches_constant_field():
     # must still take the native ASM path and give the same image as passing
     # the constant Field directly.
     import numpy as np
-    from diffraction import Field, Grid, make_grid, propagate_polychromatic, square_aperture
+    from diffractor import Field, Grid, make_grid, propagate_polychromatic, square_aperture
 
     grid = make_grid(64, 2e-3)
     x, y = grid
@@ -106,7 +108,7 @@ def test_asm_callable_with_fresh_grid_matches_constant_field():
 
 
 def test_longitudinal_returns_rgb_section():
-    from diffraction import propagate_polychromatic_longitudinal
+    from diffractor import propagate_polychromatic_longitudinal
 
     U0 = _aperture()
     wl = np.linspace(450e-9, 650e-9, 6)
@@ -122,7 +124,7 @@ def test_longitudinal_returns_rgb_section():
 
 
 def test_longitudinal_single_wavelength_matches_its_color():
-    from diffraction import propagate_polychromatic_longitudinal, wavelength_to_rgb
+    from diffractor import propagate_polychromatic_longitudinal, wavelength_to_rgb
 
     U0 = _aperture()
     sec = propagate_polychromatic_longitudinal(
@@ -137,7 +139,7 @@ def test_longitudinal_single_wavelength_matches_its_color():
 
 
 def test_longitudinal_native_sampling_and_axis_y():
-    from diffraction import propagate_polychromatic_longitudinal
+    from diffractor import propagate_polychromatic_longitudinal
 
     U0 = _aperture()
     wl = np.linspace(500e-9, 600e-9, 4)
@@ -148,7 +150,7 @@ def test_longitudinal_native_sampling_and_axis_y():
 
 
 def test_longitudinal_validation():
-    from diffraction import propagate_polychromatic_longitudinal
+    from diffractor import propagate_polychromatic_longitudinal
 
     U0 = _aperture()
     with pytest.raises(ValueError):

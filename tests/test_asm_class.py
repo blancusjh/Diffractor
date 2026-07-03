@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from diffraction import (
+from diffractor import (
     AngularSpectrum,
     CUPY_AVAILABLE,
     Field,
@@ -139,10 +139,11 @@ class TestGPU:
 def test_intensity_stack_normalize_modes():
     import numpy as np
     import pytest
-    from diffraction import AngularSpectrum, antialiased, circular_aperture, make_grid
+    from diffractor import AngularSpectrum, MonochromaticField, circular_aperture, make_grid
 
     grid = make_grid(128, 2e-3)
-    U0 = antialiased(circular_aperture, grid, 0.4e-3)
+    U0 = MonochromaticField(grid, 1.0).add_aperture(
+        circular_aperture, 0.4e-3, antialiased=True).to_field()
     prop = AngularSpectrum(U0, wavelength=532e-9)
     zs = [0.02, 0.05]
 

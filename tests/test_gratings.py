@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from diffraction import (
+from diffractor import (
     Field,
     cross_grating,
     fresnel_zoom_propagator,
