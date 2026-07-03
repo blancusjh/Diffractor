@@ -24,8 +24,11 @@ Two families of views:
 * **Focal-spot images** (second row): the 2-D PSF at the design plane (oval
   Airy disc vs parabola halo) and the parabola refocused to its best plane.
 
-Below them, the quantitative panels: shape difference, exact OPD, on-axis
-through-focus, PSF profiles vs the analytic Airy, and encircled energy.
+Below them, the surfaces are drawn side by side — the exact oval against the
+equivalent paraboloid ``z = O r² / 2`` with vertex curvature
+``O = (n2·zo − n1·zi) / (zi·zo·(n2 − n1))`` — followed by their r⁴ shape
+difference, the exact OPD, the on-axis through-focus response, PSF profiles vs
+the analytic Airy, and encircled energy.
 
 At high NA the J0-reduced azimuthal integral drops a small quadratic term
 (printed below) and the scalar model omits vector/polarization effects, so the
@@ -96,7 +99,11 @@ def radial_to_image(profile, r_out, half, n=221):
 
 def main() -> None:
     oval = CartesianSurface(n1=N1, n2=N2, zo=ZO, zi=ZI)
-    parab = ParabolicSurface(focal_length=1.0 / (2.0 * oval.paraxial_curvature()))
+    # The equivalent (osculating) paraboloid has sag  z = O r² / 2  with O the
+    # oval's paraxial curvature,  O = (n2·zo − n1·zi) / (zi·zo·(n2 − n1)).
+    # ParabolicSurface.sag = ρ²/(4f), so f = 1/(2O) reproduces exactly O r²/2.
+    O = oval.paraxial_curvature()
+    parab = ParabolicSurface(focal_length=1.0 / (2.0 * O))
 
     r = np.linspace(0.0, R_AP, 3000)
     zeros = np.zeros_like(r)
@@ -194,47 +201,52 @@ def main() -> None:
     fig.colorbar(im_s, ax=list(ax[1, :]), location="right", fraction=0.03, aspect=30,
                  label="log₁₀(I / oval peak)")
 
-    # Row 2 — shape difference, OPD, on-axis through-focus.
-    ax[2, 0].plot(r * 1e3, (z_o - z_p) * 1e6, "C0")
+    # Row 2 — the surfaces themselves, their r⁴ difference, and the OPD.
+    r_full = np.concatenate([-r[::-1], r])
+    zo_full = np.concatenate([z_o[::-1], z_o])
+    zp_full = np.concatenate([z_p[::-1], z_p])
+    ax[2, 0].plot(r_full * 1e3, zo_full * 1e3, "C2", lw=1.6, label="Cartesian oval")
+    ax[2, 0].plot(r_full * 1e3, zp_full * 1e3, "C3", ls="--", lw=1.2, label="parabola  z = O r²/2")
+    ax[2, 0].set_aspect("equal")
     ax[2, 0].set_xlabel("r [mm]")
-    ax[2, 0].set_ylabel("z_oval − z_parabola [µm]")
-    ax[2, 0].set_title("Shape difference (∝ r⁴)")
+    ax[2, 0].set_ylabel("sag z [mm]")
+    ax[2, 0].set_title(f"Refracting surfaces (O = {O:.0f} m⁻¹, R = {1e3/O:.2f} mm)")
+    ax[2, 0].legend(fontsize=8, loc="upper center")
     ax[2, 0].grid(alpha=0.3)
 
-    ax[2, 1].plot(r * 1e3, W_p, "C3", label="parabola")
-    ax[2, 1].plot(r * 1e3, geometric_opd_waves(z_o, r), "C2", label="Cartesian oval (≡ 0)")
+    ax[2, 1].plot(r * 1e3, (z_o - z_p) * 1e6, "C0")
     ax[2, 1].set_xlabel("r [mm]")
-    ax[2, 1].set_ylabel("OPD [waves]")
-    ax[2, 1].set_title("Exact geometric spherical aberration")
-    ax[2, 1].legend()
+    ax[2, 1].set_ylabel("z_oval − z_parabola [µm]")
+    ax[2, 1].set_title("Shape difference (∝ r⁴)")
     ax[2, 1].grid(alpha=0.3)
 
-    ax[2, 2].plot(zs * 1e3, F_o / I0, "C2", label="Cartesian oval")
-    ax[2, 2].plot(zs * 1e3, F_p / I0, "C3", label="parabola")
-    ax[2, 2].axvline(ZI * 1e3, color="gray", ls="--", lw=0.8)
-    ax[2, 2].set_xlabel("z [mm]")
-    ax[2, 2].set_ylabel("I(0, z) / oval peak")
-    ax[2, 2].set_title("Through-focus axial response")
+    ax[2, 2].plot(r * 1e3, W_p, "C3", label="parabola")
+    ax[2, 2].plot(r * 1e3, geometric_opd_waves(z_o, r), "C2", label="Cartesian oval (≡ 0)")
+    ax[2, 2].set_xlabel("r [mm]")
+    ax[2, 2].set_ylabel("OPD [waves]")
+    ax[2, 2].set_title("Exact geometric spherical aberration")
     ax[2, 2].legend()
     ax[2, 2].grid(alpha=0.3)
 
-    # Row 3 — PSF profiles and encircled energy.
-    ax[3, 0].semilogy(r_out * 1e6, P_o, "C2", label="oval @ design plane")
-    ax[3, 0].semilogy(r_out * 1e6, airy, "k--", lw=1, label="analytic Airy")
-    ax[3, 0].semilogy(r_out * 1e6, P_p, "C3", label="parabola @ design plane")
-    ax[3, 0].set_ylim(1e-7, 2)
-    ax[3, 0].set_xlabel("r [µm]")
-    ax[3, 0].set_ylabel("I / oval peak")
-    ax[3, 0].set_title("PSF at the design image plane")
-    ax[3, 0].legend(fontsize=8)
+    # Row 3 — through-focus axial response, PSF profiles, encircled energy.
+    ax[3, 0].plot(zs * 1e3, F_o / I0, "C2", label="Cartesian oval")
+    ax[3, 0].plot(zs * 1e3, F_p / I0, "C3", label="parabola")
+    ax[3, 0].axvline(ZI * 1e3, color="gray", ls="--", lw=0.8)
+    ax[3, 0].set_xlabel("z [mm]")
+    ax[3, 0].set_ylabel("I(0, z) / oval peak")
+    ax[3, 0].set_title("Through-focus axial response")
+    ax[3, 0].legend()
     ax[3, 0].grid(alpha=0.3)
 
     ax[3, 1].semilogy(r_out * 1e6, P_o, "C2", label="oval @ design plane")
-    ax[3, 1].semilogy(r_out * 1e6, P_pb, "C1", label=f"parabola @ best focus ({z_best*1e3:.2f} mm)")
+    ax[3, 1].semilogy(r_out * 1e6, airy, "k--", lw=1, label="analytic Airy")
+    ax[3, 1].semilogy(r_out * 1e6, P_p, "C3", label="parabola @ design plane")
+    ax[3, 1].semilogy(r_out * 1e6, P_pb, "C1", lw=1,
+                      label=f"parabola @ best focus ({z_best*1e3:.2f} mm)")
     ax[3, 1].set_ylim(1e-7, 2)
     ax[3, 1].set_xlabel("r [µm]")
     ax[3, 1].set_ylabel("I / oval peak")
-    ax[3, 1].set_title("Refocused parabola vs oval")
+    ax[3, 1].set_title("PSF profiles")
     ax[3, 1].legend(fontsize=8)
     ax[3, 1].grid(alpha=0.3)
 
