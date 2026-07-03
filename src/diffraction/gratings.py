@@ -11,6 +11,12 @@ chromatic (``k0 = 2π/λ``).
 A grating of period ``d`` sends order ``m`` to angle ``sin θ_m = m λ / d``; in
 a far-field / matrix-DFT propagation to distance ``z`` the orders land at
 ``x_m = m λ z / d``.
+
+All amplitude kernels return *float* transmissions (compare the boolean
+aperture masks); combine them arithmetically. The 1D amplitude gratings take
+``orientation`` in ``{"x", "y"}`` with 2D crossings provided by
+:func:`cross_grating` / :func:`polar_grating`, while :func:`phase_grating`
+additionally accepts ``orientation="both"`` (it crosses its own relief).
 """
 
 from __future__ import annotations

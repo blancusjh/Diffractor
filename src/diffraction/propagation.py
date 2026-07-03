@@ -58,8 +58,12 @@ def fresnel_output_grid(grid: Grid, z: float, wavelength: float, n: float = 1.0)
     output plane grows linearly with the propagation distance.
     """
     _validate_medium(wavelength, n)
-    if z == 0:
-        raise ValueError("z must be non-zero for Fresnel propagation.")
+    if z <= 0:
+        raise ValueError(
+            "z must be positive for the single-FFT Fresnel/Fraunhofer methods "
+            "(their output grid scales with z); use asm_propagator for "
+            "back-propagation (z < 0)."
+        )
 
     wavelength_medium = wavelength / n
     fgrid = frequency_grid(grid)
@@ -74,7 +78,8 @@ def fresnel_propagator(field: Field, z: float, wavelength: float, n: float = 1.0
     field : Field
         Input field.
     z : float
-        Propagation distance [m], non-zero.
+        Propagation distance [m], positive (use :func:`asm_propagator` for
+        back-propagation).
     wavelength : float
         Vacuum wavelength [m].
     n : float
@@ -169,8 +174,12 @@ def fresnel_zoom_propagator(
     ``N² log N``, so keep the output window modest (≲ 1024 samples).
     """
     _validate_medium(wavelength, n)
-    if z == 0:
-        raise ValueError("z must be non-zero for Fresnel propagation.")
+    if z <= 0:
+        raise ValueError(
+            "z must be positive for the single-FFT Fresnel/Fraunhofer methods "
+            "(their output grid scales with z); use asm_propagator for "
+            "back-propagation (z < 0)."
+        )
 
     if output_grid is None:
         if output_half_width is None:

@@ -194,23 +194,36 @@ class AngularSpectrum:
         self,
         zs: Sequence[float],
         *,
-        normalize: bool = True,
+        normalize: bool | str = True,
         to_cpu: bool = True,
     ) -> List[Array]:
         """Intensity frames ``|U(z)|²`` for every ``z`` in ``zs``.
 
         Convenience for building z-sweep animations: returns real-valued
-        frames, individually peak-normalized by default and moved back to the
-        host (``to_cpu=True``) so they can be handed straight to
-        :func:`diffraction.viz.animate` or matplotlib.
+        frames moved back to the host (``to_cpu=True``) so they can be handed
+        straight to :func:`diffraction.viz.animate` or matplotlib.
+
+        ``normalize`` selects the scaling: ``True`` (default) peak-normalizes
+        each frame *individually* — every plane uses the full display range,
+        but relative brightness between planes is lost; ``"global"`` divides
+        the whole stack by its single maximum, preserving how a focus
+        brightens through the sweep (matching
+        :func:`~diffraction.longitudinal.longitudinal_field`); ``False``
+        returns raw ``|U|²``.
         """
+        if normalize not in (True, False, "global"):
+            raise ValueError("normalize must be True, False or 'global'.")
         xp = self.xp
         frames = []
         for z in zs:
             I = xp.abs(self.propagate(float(z)).values) ** 2
-            if normalize:
+            if normalize is True:
                 peak = I.max()
                 if peak > 0:
                     I = I / peak
             frames.append(asnumpy(I) if to_cpu else I)
+        if normalize == "global":
+            peak = max(float(f.max()) for f in frames)
+            if peak > 0:
+                frames = [f / peak for f in frames]
         return frames

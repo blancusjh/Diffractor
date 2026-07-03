@@ -115,7 +115,7 @@ def xyz_to_srgb(
         Scale the whole array so its brightest linear channel is 1 before the
         display transforms. Default True.
     saturation : float
-        Chroma multiplier applied about each pixel's luminance (1.0 = none;
+        Chroma multiplier applied about each pixel's channel mean (1.0 = none;
         >1 more vivid). Default 1.0 (colorimetrically faithful).
     stretch : float
         Display-gamma exponent applied to the normalized linear intensity

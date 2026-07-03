@@ -163,6 +163,12 @@ def fit_zernikes(
 
     grid = field.grid
     W = field.values
+    if np.iscomplexobj(W):
+        raise TypeError(
+            "fit_zernikes expects a real wavefront/OPD map, not a complex "
+            "field; pass e.g. the (unwrapped) phase divided by k, not the "
+            "field itself."
+        )
     rho, theta, inside = _pupil_polar(grid, radius, center)
     valid = inside & np.isfinite(W)
     rho_v, theta_v, W_v = rho[valid], theta[valid], np.asarray(W, dtype=float)[valid]

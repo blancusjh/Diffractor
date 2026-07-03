@@ -81,3 +81,25 @@ def test_validation():
         propagate_polychromatic(
             U0, [550e-9], z=0.3, propagator="bogus", output_half_width=2e-3
         )
+
+
+def test_asm_callable_with_fresh_grid_matches_constant_field():
+    # A callable that rebuilds its Field on a *new* (but equal) Grid each call
+    # must still take the native ASM path and give the same image as passing
+    # the constant Field directly.
+    import numpy as np
+    from diffraction import Field, Grid, make_grid, propagate_polychromatic, square_aperture
+
+    grid = make_grid(64, 2e-3)
+    x, y = grid
+    mask = square_aperture(x, y, 0.5e-3).astype(complex)
+    wl = np.linspace(500e-9, 600e-9, 3)
+
+    def field_of(lam):
+        fresh = Grid(np.array(grid.x), np.array(grid.y))  # equal, distinct object
+        return Field(fresh, mask.copy())
+
+    rgb_field, g1 = propagate_polychromatic(Field(grid, mask), wl, z=0.02, propagator="asm")
+    rgb_callable, g2 = propagate_polychromatic(field_of, wl, z=0.02, propagator="asm")
+    np.testing.assert_allclose(rgb_callable, rgb_field, atol=1e-12)
+    np.testing.assert_allclose(g2.x, g1.x)
