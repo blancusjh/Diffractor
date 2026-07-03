@@ -71,6 +71,7 @@ def main() -> None:
         field_of, wavelengths, z=FOCAL_LENGTH,
         weights=d65_weights(wavelengths * 1e9),
         output_half_width=screen_half, output_samples=640,
+        gamut="clip", stretch=0.6, saturation=1.4,
     )
 
     import matplotlib.pyplot as plt

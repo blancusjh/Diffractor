@@ -97,6 +97,9 @@ def xyz_to_srgb(
     gamut: str = "desaturate",
     gamma: bool = True,
     normalize: bool = True,
+    saturation: float = 1.0,
+    stretch: float = 1.0,
+    brightness: float = 1.0,
 ) -> Array:
     """Convert CIE XYZ to display sRGB in ``[0, 1]``.
 
@@ -110,7 +113,24 @@ def xyz_to_srgb(
         Apply the sRGB gamma (default True).
     normalize : bool
         Scale the whole array so its brightest linear channel is 1 before the
-        gamma, using the full display range. Default True.
+        display transforms. Default True.
+    saturation : float
+        Chroma multiplier applied about each pixel's luminance (1.0 = none;
+        >1 more vivid). Default 1.0 (colorimetrically faithful).
+    stretch : float
+        Display-gamma exponent applied to the normalized linear intensity
+        (``linear ** stretch``) before the sRGB gamma. ``<1`` compresses the
+        dynamic range to reveal faint structure (spikes, outer fringes) without
+        blowing out bright cores. Default 1.0.
+    brightness : float
+        Exposure multiplier applied after normalization; ``>1`` brightens and
+        lets bright regions clip. Default 1.0.
+
+    Notes
+    -----
+    The three display controls all default to the identity, so the default
+    output is the physically faithful render; raise ``saturation`` / lower
+    ``stretch`` / raise ``brightness`` purely for punchier visualization.
     """
     XYZ = np.asarray(XYZ, dtype=float)
     if XYZ.shape[-1] != 3:
@@ -132,7 +152,16 @@ def xyz_to_srgb(
         if peak > 0:
             linear = linear / peak
 
-    rgb = _srgb_gamma(linear) if gamma else np.clip(linear, 0.0, 1.0)
+    if brightness != 1.0:
+        linear = np.clip(linear * brightness, 0.0, 1.0)
+    if stretch != 1.0:
+        linear = np.clip(linear, 0.0, None) ** stretch
+    if saturation != 1.0:
+        grey = linear.mean(axis=-1, keepdims=True)
+        linear = np.clip(grey + (linear - grey) * saturation, 0.0, None)
+
+    linear = np.clip(linear, 0.0, 1.0)
+    rgb = _srgb_gamma(linear) if gamma else linear
     return np.clip(rgb, 0.0, 1.0)
 
 
@@ -150,6 +179,9 @@ def spectrum_to_srgb(
     weights: Optional[Array] = None,
     gamut: str = "desaturate",
     gamma: bool = True,
+    saturation: float = 1.0,
+    stretch: float = 1.0,
+    brightness: float = 1.0,
 ) -> Array:
     """Composite per-wavelength intensity maps into an sRGB image.
 
@@ -164,8 +196,8 @@ def spectrum_to_srgb(
     weights : array (K,), optional
         Spectral power of the source at each wavelength (e.g.
         :func:`d65_weights`). Defaults to flat (equal energy).
-    gamut, gamma :
-        Passed to :func:`xyz_to_srgb`.
+    gamut, gamma, saturation, stretch, brightness :
+        Passed to :func:`xyz_to_srgb` (see there for the display controls).
 
     Returns
     -------
@@ -192,7 +224,10 @@ def spectrum_to_srgb(
     # XYZ image (H, W, 3) = Σ_k (w_k cmf_k) I_k
     cmf = np.stack([x, y, z], axis=-1) * w[:, None]  # (K, 3)
     XYZ = np.tensordot(stack, cmf, axes=([0], [0]))  # (H, W, 3)
-    return xyz_to_srgb(XYZ, gamut=gamut, gamma=gamma, normalize=True)
+    return xyz_to_srgb(
+        XYZ, gamut=gamut, gamma=gamma, normalize=True,
+        saturation=saturation, stretch=stretch, brightness=brightness,
+    )
 
 
 def d65_weights(wavelengths: Array) -> Array:

@@ -29,6 +29,8 @@ from .apertures import (
     elliptical_aperture,
     lattice_aperture,
     lattice_sites,
+    nslit_aperture,
+    polygon_aperture,
     rectangular_aperture,
     slit_aperture,
     square_aperture,
@@ -78,7 +80,7 @@ from .surfaces import (
 )
 from .viz import animate, plot_scalar_field, plot_scalar_field_3d
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "CUPY_AVAILABLE",
@@ -122,12 +124,14 @@ __all__ = [
     "marechal_strehl",
     "next_fft_size",
     "noll_to_nm",
+    "nslit_aperture",
     "phase_grating",
     "plane_wave",
     "plot_intensity",
     "plot_rgb",
     "plot_scalar_field",
     "plot_scalar_field_3d",
+    "polygon_aperture",
     "propagate_polychromatic",
     "pv",
     "recommend_grid_convergence",
