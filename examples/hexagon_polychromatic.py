@@ -28,18 +28,17 @@ from diffraction import (
 N = 1024
 L = 18e-3  # window [m]
 Z = 0.8  # propagation distance [m]
-FLAT_TO_FLAT = 5.6e-3  # hexagon width across flats [m]
-N_WAVELENGTHS = 36
+CIRCUMRADIUS = 5.6e-3 / 2.0  # 5.6 mm vertex-to-vertex (diffractsim's convention)
+N_WAVELENGTHS = 48
 SCREEN_HALF = 7e-3  # plot half-width [m]
 
 
 def main() -> None:
     grid = make_grid(N, L)
-    # across-flats width = 2 · apothem = 2 · radius · cos(π/6)
-    radius = FLAT_TO_FLAT / (2.0 * np.cos(np.pi / 6.0))
-    hexagon = antialiased(polygon_aperture, grid, 6, radius)
+    # rotation = π/6 places a vertex on +x, matching diffractsim's hexagon
+    hexagon = antialiased(polygon_aperture, grid, 6, CIRCUMRADIUS, rotation=np.pi / 6)
 
-    wavelengths = np.linspace(420e-9, 680e-9, N_WAVELENGTHS)
+    wavelengths = np.linspace(400e-9, 700e-9, N_WAVELENGTHS)
     rgb, out_grid = propagate_polychromatic(
         hexagon,
         wavelengths,
