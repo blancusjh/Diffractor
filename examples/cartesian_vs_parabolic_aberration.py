@@ -194,7 +194,12 @@ def main() -> None:
                 rows[i] = 1.0 / (K2 * d1) ** 2
             else:
                 boost = abs(1.0 / z - 1.0 / ZI) / abs(1.0 / Z_REF - 1.0 / ZI)
-                k = max(1, int(N_MASTER // (N_BASE * min(max(boost, 1.0), 10.0))))
+                # Floor of 3 (not 1): near focus, adjacent z-planes can land
+                # in different integer k bins, and the resulting quadrature
+                # error jump reads as a jagged sawtooth along the shadow-side
+                # diffraction fringes -- verified to vanish once k is capped
+                # at N_MASTER/(N_BASE*3) instead of N_MASTER/(N_BASE*1).
+                k = max(1, int(N_MASTER // (N_BASE * min(max(boost, 3.0), 10.0))))
                 rows[i] = np.abs(huygens_field(sag[::k], r_m[::k], z, rc)) ** 2
         full = np.concatenate([rows[:, ::-1], rows[:, 1:]], axis=1)  # (n_z, n_t)
         return LongitudinalSection(intensity=full / I0, z=zc, t=tc, axis="x")
