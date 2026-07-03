@@ -56,7 +56,8 @@ from .gratings import (
     sinusoidal_amplitude_grating,
 )
 from .grids import Grid, grid_spacing, make_grid
-from .plotting import intensity, plot_intensity, plot_rgb
+from .longitudinal import LongitudinalSection, longitudinal_field
+from .plotting import intensity, plot_intensity, plot_longitudinal, plot_rgb
 from .polychromatic import propagate_polychromatic
 from .propagation import (
     asm_propagator,
@@ -94,6 +95,7 @@ __all__ = [
     "Field",
     "Grid",
     "GridRecommendation",
+    "LongitudinalSection",
     "ParabolicSurface",
     "Surface",
     "animate",
@@ -121,6 +123,7 @@ __all__ = [
     "intensity",
     "lattice_aperture",
     "lattice_sites",
+    "longitudinal_field",
     "make_grid",
     "marechal_strehl",
     "next_fft_size",
@@ -129,6 +132,7 @@ __all__ = [
     "phase_grating",
     "plane_wave",
     "plot_intensity",
+    "plot_longitudinal",
     "plot_rgb",
     "plot_scalar_field",
     "plot_scalar_field_3d",
