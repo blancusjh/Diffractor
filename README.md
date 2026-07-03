@@ -72,6 +72,11 @@ applied to a field (`FT2`, `IFT2`), not methods on it.
 - **Backends** (`diffraction.backend`) — CPU/GPU array-module resolution
   (`array_module`, `asnumpy`, `to_device`) so the numerical core runs
   unchanged on NumPy or CuPy.
+- **Longitudinal fields** (`diffraction.longitudinal`) — `longitudinal_field`
+  sweeps a field through a range of distances and slices a transverse line at
+  each plane to build an `x–z` (or `y–z`) cross-section — a lens's focusing
+  cone, a beam waist, or a grating's Talbot self-imaging carpet — drawn with
+  `plot_longitudinal`.
 - **Helpers** — `make_grid` for FFT-friendly sampling grids and
   `plot_intensity` for quick log-intensity figures.
 
@@ -205,6 +210,8 @@ Runnable scripts live in [`examples/`](examples):
 | `grating_spectrometer.py` | Grating + lens spectrometer — a Ronchi grating giving symmetric focused spectra vs. a blazed grating steering the energy into one order |
 | `cross_grating_lens.py` | Square (cross) grating at a lens focus → a centered lattice of orders at `(m λ f / d, n λ f / d)`, monochromatic and white-light (each order dispersed) |
 | `polar_grating_lens.py` | Polar grating (rings × spokes) at a lens focus → a centered polar lattice of orders; the white-light ring orders disperse radially (blue in, red out) |
+| `lens_longitudinal_focus.py` | The focusing cone of a lens seen edge-on (`longitudinal_field`) — converging cone, focal waist at `z = f`, diverging cone |
+| `grating_talbot_carpet.py` | A grating's Talbot carpet — the `x–z` longitudinal near field showing self-images at `z_T = 2 d²/λ` and fractional revivals between |
 
 ```bash
 python examples/simple_fresnel_diffraction.py
@@ -283,6 +290,7 @@ src/diffraction/
 ├── aberrations.py   # Zernike fitting, PV/RMS, Maréchal Strehl
 ├── colorimetry.py   # CIE 1931 CMF, wavelength/spectrum -> sRGB
 ├── polychromatic.py # broadband propagation -> color image
+├── longitudinal.py  # x-z / y-z axial field cross-sections (focus, Talbot)
 ├── plotting.py      # matplotlib intensity + RGB display helpers
 └── viz.py           # optional VisPy interactive viewers + animation
 examples/            # runnable demo scripts
