@@ -4,6 +4,14 @@ A small, tested scalar-diffraction toolkit built on NumPy. It propagates
 complex optical fields with Fourier-optics methods and models apertures and
 thin refracting surfaces.
 
+![Stigmatic Cartesian oval vs its osculating paraboloid at NA 0.24 — the incident beam crosses each refracting surface and propagates continuously to (and past) the focus; the oval focuses to a diffraction-limited point while the paraboloid smears into a spherical-aberration caustic.](docs/images/oval_vs_parabola_system.png)
+
+*One continuous propagation per surface — incident beam, refractor, converging
+cone, focus, and the diverging field beyond — from
+[`examples/cartesian_vs_parabolic_aberration.py`](examples/cartesian_vs_parabolic_aberration.py):
+the exact stigmatic Cartesian oval (left) against its paraboloid (center) at
+NA 0.24, with the focal-plane PSFs below.*
+
 A field is a first-class object — `Field(grid, values)`, the sampling `Grid`
 plus its complex samples — that flows through the whole pipeline (aperture →
 surface phase → propagator → plot). Coordinate queries live on the grid
