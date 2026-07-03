@@ -86,6 +86,7 @@ def plot_longitudinal(
     vmin: float = -4.0,
     vmax: float = 0.0,
     cmap: str = "inferno",
+    normalize: bool = True,
 ):
     """Draw an axial (``x–z``/``y–z``) intensity cross-section.
 
@@ -94,11 +95,17 @@ def plot_longitudinal(
     or a grating's Talbot carpet reads directly off the image. Takes the
     :class:`~diffraction.longitudinal.LongitudinalSection` returned by
     :func:`~diffraction.longitudinal.longitudinal_field`.
+
+    ``normalize`` (default ``True``) rescales the section by its own peak so a
+    single ``vmin``/``vmax`` spans it. Pass ``normalize=False`` to show the
+    intensity as supplied — e.g. when two sections are pre-scaled to a *shared*
+    reference so their relative brightness (and hence Strehl loss) is preserved.
     """
     data = section.intensity.T  # (n_t, n_z): transverse vertical, z horizontal
-    peak = data.max()
-    norm = data / peak if peak > 0 else data
-    shown = np.log10(norm + 10.0 ** (vmin - 4)) if log else norm
+    if normalize:
+        peak = data.max()
+        data = data / peak if peak > 0 else data
+    shown = np.log10(data + 10.0 ** (vmin - 4)) if log else data
     im = ax.imshow(
         shown,
         extent=[section.z.min(), section.z.max(), section.t.min(), section.t.max()],
