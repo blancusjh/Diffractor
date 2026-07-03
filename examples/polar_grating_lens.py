@@ -14,24 +14,20 @@ out on concentric rings instead of a square grid.
 Three panels: the polar grating, its monochromatic focal-plane pattern, and —
 since the lens phase is chromatic — the white-light version, where every
 off-axis order disperses radially into a little spectrum
-(`propagate_polychromatic` with a per-wavelength `field_of`).
+(a `PolychromaticField` replaying the lens phase per wavelength).
 
 Run with:  python examples/polar_grating_lens.py
 """
 
 import numpy as np
 
-from diffraction import (
-    Field,
+from diffractor import (
+    MonochromaticField,
+    PolychromaticField,
     circular_aperture,
     d65_weights,
-    fresnel_zoom_propagator,
     make_grid,
-    plot_intensity,
-    plot_rgb,
     polar_grating,
-    propagate_polychromatic,
-    thin_lens,
 )
 
 N = 1024
@@ -44,11 +40,13 @@ BEAM_HALF = 1.7e-3  # illuminated radius [m]
 
 
 def grating_field(grid):
-    x, y = grid
-    mask = polar_grating(x, y, radial_period=RADIAL_PERIOD, n_spokes=N_SPOKES)
     # a circular stop bounds the beam and hides the singular spoke center
-    mask = mask * circular_aperture(x, y, BEAM_HALF) * (1.0 - circular_aperture(x, y, 60e-6))
-    return Field(grid, mask.astype(complex))
+    return MonochromaticField(
+        grid,
+        lambda x, y: polar_grating(x, y, radial_period=RADIAL_PERIOD, n_spokes=N_SPOKES)
+        * circular_aperture(x, y, BEAM_HALF)
+        * (1.0 - circular_aperture(x, y, 60e-6)),
+    )
 
 
 def main() -> None:
@@ -59,33 +57,38 @@ def main() -> None:
     screen_half = 2.6 * ring
 
     # Monochromatic: the polar grating through the lens, to the focal plane.
-    focused = U0 * thin_lens(grid, FOCAL_LENGTH, WAVELENGTH)
-    spots = fresnel_zoom_propagator(
-        focused, z=FOCAL_LENGTH, wavelength=WAVELENGTH,
-        output_half_width=screen_half, output_samples=640,
+    spots = (
+        MonochromaticField(grid, U0.to_field(), wavelength=WAVELENGTH)
+        .add_lens(FOCAL_LENGTH)
+        .propagate(
+            FOCAL_LENGTH, method="fresnel_zoom",
+            output_half_width=screen_half, output_samples=640,
+        )
     )
 
     # White light: the lens phase is chromatic, so rebuild the field per λ.
     wavelengths = np.linspace(430e-9, 660e-9, 32)
 
-    def field_of(lam):
-        return U0 * thin_lens(grid, FOCAL_LENGTH, lam)
-
-    rgb, rgb_grid = propagate_polychromatic(
-        field_of, wavelengths, z=FOCAL_LENGTH,
-        weights=d65_weights(wavelengths * 1e9),
-        output_half_width=screen_half, output_samples=640,
-        gamut="clip", stretch=0.55, saturation=1.4,
+    img = (
+        PolychromaticField(
+            grid, U0.to_field(), wavelengths=wavelengths, weights=d65_weights(wavelengths * 1e9)
+        )
+        .add_lens(FOCAL_LENGTH)
+        .propagate(
+            FOCAL_LENGTH, method="fresnel_zoom",
+            output_half_width=screen_half, output_samples=640,
+            gamut="clip", stretch=0.55, saturation=1.4,
+        )
     )
 
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(1, 3, figsize=(15, 4.6), constrained_layout=True)
-    plot_intensity(ax[0], U0, title=f"Polar grating (d_r = {RADIAL_PERIOD*1e6:.0f} µm, {N_SPOKES} spokes)")
+    U0.plot(ax[0], title=f"Polar grating (d_r = {RADIAL_PERIOD*1e6:.0f} µm, {N_SPOKES} spokes)")
     ax[0].set_xlim(-BEAM_HALF, BEAM_HALF)
     ax[0].set_ylim(-BEAM_HALF, BEAM_HALF)
-    plot_intensity(ax[1], spots, title=f"Focal-plane orders ({int(WAVELENGTH*1e9)} nm)", vmin=-4.0)
-    plot_rgb(ax[2], rgb, rgb_grid, title="White-light orders (each dispersed)")
+    spots.plot(ax[1], title=f"Focal-plane orders ({int(WAVELENGTH*1e9)} nm)", vmin=-4.0)
+    img.plot(ax[2], title="White-light orders (each dispersed)")
     fig.suptitle("Polar grating at a lens focal plane: a centered polar lattice of orders")
     plt.show()
 

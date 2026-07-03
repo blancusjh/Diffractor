@@ -22,7 +22,7 @@ from typing import Optional, Tuple, Union
 import numpy as np
 
 from .field import Field
-from .grids import Array, Grid
+from ..mathutils.grids import Array, Grid
 
 __all__ = [
     "fit_zernikes",

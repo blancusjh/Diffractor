@@ -9,16 +9,15 @@ The grating fills an integer number of periods across the window, so the FFT's
 periodic wrap-around is exactly the infinite-grating boundary condition
 (`pad_factor=1`) — the carpet is physically correct, not an artifact.
 
-Uses `longitudinal_field` + `plot_longitudinal`.
+Uses `MonochromaticField.longitudinal` + `plot_longitudinal`.
 
 Run with:  python examples/grating_talbot_carpet.py
 """
 
 import numpy as np
 
-from diffraction import (
-    Field,
-    longitudinal_field,
+from diffractor import (
+    MonochromaticField,
     make_grid,
     plot_longitudinal,
     ronchi_grating,
@@ -33,13 +32,16 @@ N_PLANES = 280
 
 def main() -> None:
     grid = make_grid(N, L)
-    x, y = grid
     # A plane wave through a Ronchi grating (a full-window periodic mask).
-    U0 = Field(grid, ronchi_grating(x, y, PERIOD, duty=0.5).astype(complex))
+    U0 = MonochromaticField(
+        grid,
+        lambda x, y: ronchi_grating(x, y, PERIOD, duty=0.5),
+        wavelength=WAVELENGTH,
+    )
 
     z_talbot = 2.0 * PERIOD**2 / WAVELENGTH
     zs = np.linspace(0.0, 2.0 * z_talbot, N_PLANES)
-    section = longitudinal_field(U0, WAVELENGTH, zs, axis="x", pad_factor=1)
+    section = U0.longitudinal(zs, axis="x", pad_factor=1)
 
     import matplotlib.pyplot as plt
 

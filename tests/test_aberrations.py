@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from diffraction import (
+from diffractor import (
     Field,
     fit_zernikes,
     make_grid,
@@ -110,7 +110,7 @@ def test_zernike_name():
 def test_fit_zernikes_rejects_complex_field():
     import numpy as np
     import pytest
-    from diffraction import Field, fit_zernikes, make_grid
+    from diffractor import Field, fit_zernikes, make_grid
 
     grid = make_grid(64, 2e-3)
     complex_field = Field(grid, np.exp(1j * grid.x / 1e-3))

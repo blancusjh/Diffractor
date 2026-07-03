@@ -3,10 +3,10 @@
 Ties together the two "extra" pieces of the toolkit that aren't exercised by
 the core examples:
 
-  * :class:`diffraction.AngularSpectrum` — the reusable, batch-friendly
+  * :class:`diffractor.AngularSpectrum` — the reusable, batch-friendly
     angular-spectrum propagator, run on an NVIDIA GPU through CuPy when one
     is available (falls back to NumPy on the CPU otherwise).
-  * :mod:`diffraction.viz` — the VisPy-based interactive viewers
+  * :mod:`diffractor.viz.viewers` — the VisPy-based interactive viewers
     (:func:`plot_scalar_field`, :func:`plot_scalar_field_3d`), which render
     large fields with a GPU-accelerated, pannable/zoomable canvas instead of
     matplotlib's raster path.
@@ -29,11 +29,11 @@ Run with:  python examples/gpu_focus_viewer.py
 
 import numpy as np
 
-from diffraction import (
+from diffractor import (
     AngularSpectrum,
     CUPY_AVAILABLE,
+    MonochromaticField,
     ParabolicSurface,
-    antialiased,
     circular_aperture,
     make_grid,
 )
@@ -52,14 +52,16 @@ def main() -> None:
     grid = make_grid(N, L)
 
     surface = ParabolicSurface(focal_length=FOCAL_LENGTH)
-    U0 = antialiased(circular_aperture, grid, RADIUS)
-    U_after = U0 * surface.phase_mask(grid, WAVELENGTH, N1, N2)
+    U_after = MonochromaticField(grid, 1.0, wavelength=WAVELENGTH).add_aperture(
+        circular_aperture, RADIUS, antialiased=True
+    ).add_surface(surface, n1=N1, n2=N2)
+    field_after = U_after.to_field()
 
     z_focus = 2.0 * FOCAL_LENGTH * N2 / (N2 - N1)
 
     device = "gpu" if CUPY_AVAILABLE else "cpu"
     if device == "gpu":
-        U_after = U_after.to("gpu")
+        field_after = field_after.to("gpu")
     tag = "[GPU/CuPy]" if device == "gpu" else "[CPU/NumPy]"
     print(f"Batched focus scan of {N_PLANES} planes on {device.upper()} {tag}")
 
@@ -70,7 +72,7 @@ def main() -> None:
     # ~360 mm scan, and without padding it wraps around the small (3 mm)
     # window through the FFT's periodic boundary, aliasing back in as a
     # spurious grid-aligned cross-hatch pattern.
-    prop = AngularSpectrum(U_after, wavelength=WAVELENGTH, n=N2, pad_factor=2)
+    prop = AngularSpectrum(field_after, wavelength=WAVELENGTH, n=N2, pad_factor=2)
 
     zs = z_focus + np.linspace(-DEFOCUS_SPAN, DEFOCUS_SPAN, N_PLANES)
     stack = prop.intensity_stack(zs, normalize=False)  # host arrays, physical units
@@ -88,7 +90,7 @@ def main() -> None:
           f"(paraxial estimate {z_focus * 1e3:.3f} mm)")
 
     try:
-        from diffraction import plot_scalar_field, plot_scalar_field_3d
+        from diffractor import plot_scalar_field, plot_scalar_field_3d
 
         plot_scalar_field(
             focus_plane,

@@ -1,6 +1,6 @@
 """Scalar diffraction propagators.
 
-Every propagator maps a :class:`~diffraction.field.Field` to a ``Field`` — the
+Every propagator maps a :class:`~diffractor.physics.field.Field` to a ``Field`` — the
 sampling grid travels with the samples, so no separate ``grid`` argument is
 threaded through the pipeline.
 
@@ -31,8 +31,8 @@ from typing import Optional
 import numpy as np
 
 from .field import Field
-from .fourier import FFT2, FT2, IFT2, frequency_grid
-from .grids import Array, Grid
+from ..mathutils.fourier import FFT2, FT2, IFT2, frequency_grid
+from ..mathutils.grids import Array, Grid
 
 __all__ = [
     "asm_propagator",
@@ -276,7 +276,7 @@ def asm_propagator(
         the output sampling/window from the input (MPASM / scaled-ASM). This
         can drastically cut the sample count when the input support is small,
         but does **not** relieve the input-``dx`` Nyquist requirement of the
-        field itself (see :mod:`diffraction.sampling`). ``None`` (default)
+        field itself (see :mod:`diffractor.mathutils.sampling`). ``None`` (default)
         returns the field on its own grid.
     include_evanescent : bool
         Keep evanescent components (exponential decay) instead of filtering.

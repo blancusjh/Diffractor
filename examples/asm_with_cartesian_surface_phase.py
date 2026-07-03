@@ -10,13 +10,11 @@ Run with:  python examples/asm_with_cartesian_surface_phase.py
 
 import matplotlib.pyplot as plt
 
-from diffraction import (
+from diffractor import (
+    MonochromaticField,
     CartesianSurface,
-    antialiased,
-    asm_propagator,
     circular_aperture,
     make_grid,
-    plot_intensity,
 )
 
 N = 1024  # samples per side
@@ -33,12 +31,13 @@ def main() -> None:
     x, y = grid
 
     surface = CartesianSurface(n1=N1, n2=N2, zo=ZO, zi=ZI)
-    U0 = antialiased(circular_aperture, grid, RADIUS)
-    U_after = U0 * surface.phase_mask(grid, WAVELENGTH, N1, N2)
+    U_after = MonochromaticField(grid, 1.0, wavelength=WAVELENGTH).add_aperture(
+        circular_aperture, RADIUS, antialiased=True
+    ).add_surface(surface)
 
     # Propagate to the design image plane, where the stigmatic surface
     # focuses the beam to a diffraction-limited spot.
-    Uz = asm_propagator(U_after, z=ZI, wavelength=WAVELENGTH, n=N2, pad_factor=2)
+    Uz = U_after.propagate(ZI, method="asm", pad_factor=2)
 
     fig, ax = plt.subplots(1, 3, figsize=(14, 4), constrained_layout=True)
 
@@ -53,8 +52,8 @@ def main() -> None:
     ax[0].set_ylabel("y [m]")
     fig.colorbar(im, ax=ax[0], fraction=0.046, pad=0.04)
 
-    plot_intensity(ax[1], U_after, title="Intensity after surface")
-    plot_intensity(ax[2], Uz, title=f"Design image plane (z = {ZI} m)")
+    U_after.plot(ax[1], title="Intensity after surface")
+    Uz.plot(ax[2], title=f"Design image plane (z = {ZI} m)")
     plt.show()
 
 

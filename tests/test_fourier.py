@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from diffraction import FFT2, IFFT2, frequency_grid, make_grid
+from diffractor import FFT2, IFFT2, frequency_grid, make_grid
 
 
 def test_fft_ifft_roundtrip():

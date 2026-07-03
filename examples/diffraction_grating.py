@@ -10,11 +10,9 @@ Run with:  python examples/diffraction_grating.py
 
 import numpy as np
 
-from diffraction import (
-    Field,
-    fresnel_zoom_propagator,
+from diffractor import (
+    MonochromaticField,
     make_grid,
-    plot_intensity,
     ronchi_grating,
     square_aperture,
 )
@@ -29,16 +27,15 @@ BEAM_HALF = 1e-3  # illuminated half-width [m]
 
 def main() -> None:
     grid = make_grid(N, L)
-    x, y = grid
 
-    grating = ronchi_grating(x, y, PERIOD, duty=0.5)
-    beam = square_aperture(x, y, BEAM_HALF)
-    U0 = Field(grid, (grating * beam).astype(complex))
+    U0 = MonochromaticField(grid, 1.0, wavelength=WAVELENGTH).add_grating(
+        ronchi_grating, PERIOD, duty=0.5
+    ).add_aperture(square_aperture, BEAM_HALF)
 
     x_order = WAVELENGTH * Z / PERIOD
     screen_half = 3.4 * x_order
-    Uz = fresnel_zoom_propagator(
-        U0, z=Z, wavelength=WAVELENGTH, output_half_width=screen_half, output_samples=2048
+    Uz = U0.propagate(
+        Z, method="fresnel_zoom", output_half_width=screen_half, output_samples=2048
     )
 
     # Report measured vs predicted order positions.
@@ -54,10 +51,10 @@ def main() -> None:
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 4.5), constrained_layout=True)
-    plot_intensity(ax[0], U0, title="Ronchi grating × aperture")
+    U0.plot(ax[0], title="Ronchi grating × aperture")
     ax[0].set_xlim(-3 * PERIOD, 3 * PERIOD)
     ax[0].set_ylim(-3 * PERIOD, 3 * PERIOD)
-    plot_intensity(ax[1], Uz, title=f"Far-field orders (z = {Z} m, d = {PERIOD*1e6:.0f} µm)", vmin=-4.0)
+    Uz.plot(ax[1], title=f"Far-field orders (z = {Z} m, d = {PERIOD*1e6:.0f} µm)", vmin=-4.0)
     for m in range(-3, 4):
         ax[1].axvline(m * x_order, color="cyan", lw=0.6, alpha=0.5)
     plt.show()
