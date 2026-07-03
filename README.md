@@ -194,7 +194,7 @@ Runnable scripts live in [`examples/`](examples):
 | `fresnel_with_parabolic_surface_phase.py` | Focusing by a parabolic interface |
 | `fresnel_with_cartesian_surface_phase.py` | Stigmatic Cartesian-oval surface, Fresnel propagation |
 | `asm_with_cartesian_surface_phase.py` | Stigmatic Cartesian-oval surface, ASM propagation |
-| `cartesian_vs_parabolic_aberration.py` | High-NA stigmatic Cartesian oval vs its paraboloid: edge-on through-focus caustics and 2-D focal spots (Airy disc vs spherical-aberration flare) plus OPD / PSF / encircled-energy panels (needs `scipy`) |
+| `cartesian_vs_parabolic_aberration.py` | Very-high-NA stigmatic Cartesian oval vs its paraboloid: edge-on **system caustics** (surface drawn on the x–z map, converging cone, focus and diverging field) + 2-D focal spots in one figure, quantitative metrics (shape difference, OPD, through-focus, PSF, encircled energy) in a second (needs `scipy`) |
 | `aberration_measurement.py` | Zernike decomposition of the exact OPD of both surfaces; Maréchal Strehl cross-check |
 | `asm_zsweep_animation.py` | Batched `AngularSpectrum` z-sweep, GPU when available, animated with `diffraction.viz` (needs the `viz` extra to animate) |
 | `gpu_focus_viewer.py` | Batched `AngularSpectrum` focus scan through a lens surface, GPU when available, viewed with `diffraction.viz`'s 2D/3D VisPy viewers (needs the `viz` extra to view) |

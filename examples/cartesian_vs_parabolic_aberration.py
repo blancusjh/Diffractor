@@ -1,11 +1,10 @@
-"""Cartesian oval vs its paraxial (parabolic) approximation — at high NA.
+"""Cartesian oval vs its paraxial (parabolic) approximation — at very high NA.
 
-A spherical wave from the design object point is focused by (a) the exact
-stigmatic Cartesian-oval surface and (b) the osculating paraboloid with the
-same vertex curvature. At a **high numerical aperture** the two diverge
-strongly: the oval still focuses to a textbook Airy pattern, while the
-paraboloid pours several waves of primary spherical aberration into a smeared
-caustic.
+A near-collimated source is focused by (a) the exact stigmatic Cartesian-oval
+surface and (b) the osculating paraboloid with the same vertex curvature. At a
+**very high numerical aperture** the two diverge violently: the oval still
+focuses to a textbook Airy pattern, while the paraboloid pours ~a hundred waves
+of primary spherical aberration into a wide caustic with no recognizable focus.
 
 The comparison uses the exact geometric OPD and an axisymmetric Huygens
 integral evaluated from the *curved* surface, because the thin-element
@@ -15,20 +14,26 @@ misassign spurious OPD to the stigmatic oval. Propagating from the curved
 surface with exact distances is instead equivalent to referencing each
 plane-wave component from the local surface height with its own exp(i kz z_s).
 
-Two families of views:
+The object is placed far away (near-collimated): for a *close* conjugate the
+oval's own radial extent caps the aperture near its vertex radius of curvature
+(NA ≲ 0.14 here), so opening up to NA ~ 0.25 needs a distant source — the
+classic "fast single refractor focusing a distant point" spherical-aberration
+scenario.
 
-* **Edge-on through-focus caustics** (top row): |U(x, z)|^2 near focus for each
-  surface, on a *shared* oval-peak scale — the oval a tight cone pinching to a
-  bright waist at the design plane, the parabola a flared caustic with a best
-  focus shifted toward the surface and a much lower peak.
-* **Focal-spot images** (second row): the 2-D PSF at the design plane (oval
-  Airy disc vs parabola halo) and the parabola refocused to its best plane.
+**Figure 1 (images):**
 
-Below them, the surfaces are drawn side by side — the exact oval against the
-equivalent paraboloid ``z = O r² / 2`` with vertex curvature
-``O = (n2·zo − n1·zi) / (zi·zo·(n2 − n1))`` — followed by their r⁴ shape
-difference, the exact OPD, the on-axis through-focus response, PSF profiles vs
-the analytic Airy, and encircled energy.
+* **Edge-on system caustics** (top): |U(x, z)|^2 across the whole system for each
+  surface, on a *shared* oval-peak scale — the curved refractor drawn at left,
+  then the converging cone, the focus, and the field diverging beyond it. The
+  oval pinches to a bright diffraction-limited waist at the design plane and
+  reopens symmetrically; the parabola cone crosses into a wide flared caustic.
+* **Focal-spot images** (bottom): the 2-D PSF at the design plane (oval Airy
+  disc vs parabola halo) and the parabola at its best on-axis plane.
+
+**Figure 2 (metrics):** the r⁴ shape difference, the exact OPD, the on-axis
+through-focus response, PSF profiles vs the analytic Airy, encircled energy, and
+a numeric summary. The equivalent paraboloid has sag ``z = O r² / 2`` with
+vertex curvature ``O = (n2·zo − n1·zi) / (zi·zo·(n2 − n1))``.
 
 At high NA the J0-reduced azimuthal integral drops a small quadratic term
 (printed below) and the scalar model omits vector/polarization effects, so the
@@ -45,16 +50,16 @@ from scipy.special import j0, j1
 
 from diffraction import CartesianSurface, LongitudinalSection, ParabolicSurface, plot_longitudinal
 
-# Design: a point source imaged by a single refracting surface, at high NA so
-# the oval and its osculating paraboloid separate clearly.
+# Design: a distant (near-collimated) point source imaged by a single refracting
+# surface, opened to very high NA so the oval and its paraboloid separate hugely.
 N1, N2 = 1.0, 1.5
-ZO, ZI = -6.0e-3, 12.0e-3  # object / image distances [m]
+ZO, ZI = -0.1, 12.0e-3  # object / image distances [m] (object ~collimated)
 WAVELENGTH = 530e-9
-R_AP = 1.5e-3  # aperture radius [m] — image-side NA ~ 0.12
-# A single refracting surface at high NA gives its paraboloid *many* waves of
-# spherical aberration (∝ R_AP⁴): here ~20 waves PV, a dramatic caustic while
-# the stigmatic oval stays diffraction-limited. Raising R_AP raises the NA and
-# the aberration together; the through-focus framing below adapts to it.
+R_AP = 3.0e-3  # aperture radius [m] — target image-side NA ~ 0.25 (clamped below)
+# A single refracting surface at very high NA gives its paraboloid ~a hundred
+# waves of spherical aberration; the stigmatic oval stays diffraction-limited.
+# The oval's sag solver raises past the surface's radial extent, so R_AP is
+# clamped to what the oval supports before use.
 
 K1 = 2 * np.pi * N1 / WAVELENGTH
 K2 = 2 * np.pi * N2 / WAVELENGTH
@@ -97,6 +102,18 @@ def radial_to_image(profile, r_out, half, n=221):
     return img, xs
 
 
+def supported_aperture(oval, r_target, *, shrink=0.98, tries=60):
+    """Largest radius <= r_target for which the oval's sag solver converges."""
+    r = float(r_target)
+    for _ in range(tries):
+        try:
+            oval.sag(np.array([r]), np.array([0.0]))
+            return r
+        except Exception:
+            r *= shrink
+    raise RuntimeError("no supported aperture found for this oval")
+
+
 def main() -> None:
     oval = CartesianSurface(n1=N1, n2=N2, zo=ZO, zi=ZI)
     # The equivalent (osculating) paraboloid has sag  z = O r² / 2  with O the
@@ -105,35 +122,37 @@ def main() -> None:
     O = oval.paraxial_curvature()
     parab = ParabolicSurface(focal_length=1.0 / (2.0 * O))
 
-    r = np.linspace(0.0, R_AP, 3000)
+    R = supported_aperture(oval, R_AP)  # clamp to the oval's physical extent
+    if R < R_AP:
+        print(f"aperture clamped to oval extent: {R*1e3:.3f} mm (asked {R_AP*1e3:.2f} mm)")
+
+    r = np.linspace(0.0, R, 4500)  # fine enough that K2·NA·dr < π at the focus
     zeros = np.zeros_like(r)
     z_o, z_p = oval.sag(r, zeros), parab.sag(r, zeros)
 
-    na = R_AP / np.sqrt(R_AP**2 + ZI**2)
+    na = R / np.sqrt(R**2 + ZI**2)
     W_p = geometric_opd_waves(z_p, r)
     print(f"image-side NA = {na:.3f}")
-    print(f"parabola OPD: PV = {np.ptp(W_p):.3f} waves, RMS = {np.std(W_p):.3f} waves")
+    print(f"parabola OPD: PV = {np.ptp(W_p):.2f} waves, RMS = {np.std(W_p):.2f} waves")
 
-    # Locate the parabola's best (on-axis) focus over a generous window (the
-    # marginal focus shifts well toward the surface at this much aberration).
-    zs = np.linspace(0.72 * ZI, 1.03 * ZI, 321)
+    # Locate the parabola's best on-axis plane over a generous window (at this
+    # much aberration it is broad and only weakly peaked).
+    zs = np.linspace(0.85 * ZI, 1.03 * ZI, 301)
     F_o = np.abs([huygens_field(z_o, r, z, 0.0)[0] for z in zs]) ** 2
     F_p = np.abs([huygens_field(z_p, r, z, 0.0)[0] for z in zs]) ** 2
     I0 = F_o.max()
     z_best = zs[np.argmax(F_p)]
-    print(f"parabola best focus: z = {z_best*1e3:.3f} mm (design {ZI*1e3:.1f} mm)")
+    print(f"parabola best on-axis plane: z = {z_best*1e3:.3f} mm (design {ZI*1e3:.1f} mm)")
 
-    # Transverse windows: an Airy radius ~ 0.61 lambda / NA sets the scale.
     airy_radius = 0.61 * WAVELENGTH / na
-    r_out = np.linspace(0.0, 22e-6, 400)
+    r_out = np.linspace(0.0, max(16e-6, 8 * airy_radius), 400)
     print(f"Airy radius ~ {airy_radius*1e6:.2f} um; J0 dropped term "
-          f"<= {dropped_phase_term(z_p, r, ZI, r_out.max()):.3f} rad")
+          f"<= {dropped_phase_term(z_p, r, ZI, r_out.max()):.4f} rad")
 
-    # PSF radial profiles (design plane, and parabola at best focus).
     P_o = np.abs(huygens_field(z_o, r, ZI, r_out)) ** 2 / I0
     P_p = np.abs(huygens_field(z_p, r, ZI, r_out)) ** 2 / I0
     P_pb = np.abs(huygens_field(z_p, r, z_best, r_out)) ** 2 / I0
-    print(f"parabola Strehl @ design plane: {P_p[0]:.3f}, @ best focus: {P_pb[0]:.3f}")
+    print(f"parabola Strehl @ design plane: {P_p[0]:.4f}, @ best plane: {P_pb[0]:.4f}")
 
     v = np.where(r_out == 0, 1e-12, K2 * na * r_out)
     airy = (2 * j1(v) / v) ** 2
@@ -142,27 +161,24 @@ def main() -> None:
         c = np.cumsum(P * r_out)
         return c / c[-1]
 
-    # --- Edge-on through-focus caustics, framed around the caustic ------------
-    # The caustic runs from the marginal focus (z_best) to the paraxial design
-    # plane; its transverse reach is ~ the marginal-ray height there. Frame both
-    # axes off the measured focus shift so it adapts to the aberration size.
-    dz = ZI - z_best
-    rc_max = max(1.5 * R_AP * dz / ZI, 12.0 * airy_radius)
-    zc = np.linspace(z_best - 0.35 * dz, ZI + 0.5 * dz, 160)
-    rc = np.linspace(0.0, rc_max, 160)
+    # --- Full-system longitudinal maps (surface -> focus), surfaces overlaid ---
+    z_start = 1.4 * max(z_o.max(), z_p.max())  # begin just past the surface
+    zc = np.linspace(z_start, 1.5 * ZI, 200)  # through the focus and well beyond
+    rc = np.linspace(0.0, R, 220)
     tc = np.concatenate([-rc[::-1], rc[1:]])  # mirror to a symmetric x axis
 
-    def caustic(z_s):
+    def system_caustic(z_s):
         rows = [np.abs(huygens_field(z_s, r, z, rc)) ** 2 for z in zc]
         prof = np.asarray(rows)  # (n_z, n_r)
         full = np.concatenate([prof[:, ::-1], prof[:, 1:]], axis=1)  # (n_z, n_t)
         return LongitudinalSection(intensity=full / I0, z=zc, t=tc, axis="x")
 
-    sec_o, sec_p = caustic(z_o), caustic(z_p)
+    sec_o = system_caustic(z_o)
+    sec_p = system_caustic(z_p)
 
     # --- 2-D focal-spot images (shared scale) --------------------------------
     spot_half = r_out.max()
-    img_o, xs = radial_to_image(P_o, r_out, spot_half)
+    img_o, _ = radial_to_image(P_o, r_out, spot_half)
     img_pd, _ = radial_to_image(P_p, r_out, spot_half)
     img_pb, _ = radial_to_image(P_pb, r_out, spot_half)
 
@@ -178,94 +194,113 @@ def main() -> None:
         ax.set_ylabel("y [µm]")
         return im
 
-    fig, ax = plt.subplots(4, 3, figsize=(15, 15.5), constrained_layout=True)
+    # ======================= Figure 1 — images ===============================
+    fig1, ax1 = plt.subplots(2, 3, figsize=(15, 8.6), constrained_layout=True)
 
-    # Row 0 — edge-on caustics on a shared oval-peak scale.
-    im_c = plot_longitudinal(ax[0, 0], sec_o, normalize=False, vmin=-4,
-                             title="Oval — through-focus caustic")
-    plot_longitudinal(ax[0, 1], sec_p, normalize=False, vmin=-4,
-                      title="Parabola — through-focus caustic")
-    ax[0, 0].axvline(ZI, color="cyan", ls="--", lw=0.8, alpha=0.8)  # oval focus = design
-    ax[0, 1].axvline(ZI, color="cyan", ls="--", lw=0.8, alpha=0.8)
-    ax[0, 1].axvline(z_best, color="w", ls=":", lw=0.8, alpha=0.7)  # shifted best focus
-    ax[0, 2].axis("off")
-    cb = fig.colorbar(im_c, ax=ax[0, 2], fraction=0.5, aspect=18)
+    im_c = plot_longitudinal(ax1[0, 0], sec_o, normalize=False, vmin=-6.5,
+                             title="Oval — system caustic (surface → focus)")
+    plot_longitudinal(ax1[0, 1], sec_p, normalize=False, vmin=-6.5,
+                      title="Parabola — system caustic (surface → focus)")
+    for a, zsag in ((ax1[0, 0], z_o), (ax1[0, 1], z_p)):
+        a.set_facecolor("black")  # blend the pre-surface region with the map
+        a.plot(zsag, r, color="white", lw=1.1)   # the refracting surface, drawn
+        a.plot(zsag, -r, color="white", lw=1.1)  # in the same x–z axes
+        a.set_xlim(0.0, zc.max())
+        a.axvline(ZI, color="cyan", ls="--", lw=0.8, alpha=0.8)
+    ax1[0, 1].axvline(z_best, color="w", ls=":", lw=0.8, alpha=0.6)
+
+    ax1[0, 2].axis("off")
+    cb = fig1.colorbar(im_c, ax=ax1[0, 2], fraction=0.5, aspect=18)
     cb.set_label("log₁₀(I / oval peak)")
-    ax[0, 2].text(0.5, 0.5, "cyan — — design plane\nwhite ···· parabola best focus",
-                  transform=ax[0, 2].transAxes, ha="center", va="center", fontsize=9)
+    ax1[0, 2].text(
+        0.5, 0.30,
+        "white — refracting surface\ncyan — — design plane\nwhite ···· parabola best plane",
+        transform=ax1[0, 2].transAxes, ha="center", va="center", fontsize=8,
+    )
 
-    # Row 1 — 2-D focal spots on a shared scale.
-    show_spot(ax[1, 0], img_o, "Oval PSF @ design plane")
-    im_s = show_spot(ax[1, 1], img_pd, "Parabola PSF @ design plane")
-    show_spot(ax[1, 2], img_pb, f"Parabola PSF @ best focus ({z_best*1e3:.2f} mm)")
-    fig.colorbar(im_s, ax=list(ax[1, :]), location="right", fraction=0.03, aspect=30,
-                 label="log₁₀(I / oval peak)")
+    show_spot(ax1[1, 0], img_o, "Oval PSF @ design plane")
+    im_s = show_spot(ax1[1, 1], img_pd, "Parabola PSF @ design plane")
+    show_spot(ax1[1, 2], img_pb, f"Parabola PSF @ best plane ({z_best*1e3:.2f} mm)")
+    fig1.colorbar(im_s, ax=list(ax1[1, :]), location="right", fraction=0.03, aspect=30,
+                  label="log₁₀(I / oval peak)")
 
-    # Row 2 — the surfaces themselves, their r⁴ difference, and the OPD.
-    r_full = np.concatenate([-r[::-1], r])
-    zo_full = np.concatenate([z_o[::-1], z_o])
-    zp_full = np.concatenate([z_p[::-1], z_p])
-    ax[2, 0].plot(r_full * 1e3, zo_full * 1e3, "C2", lw=1.6, label="Cartesian oval")
-    ax[2, 0].plot(r_full * 1e3, zp_full * 1e3, "C3", ls="--", lw=1.2, label="parabola  z = O r²/2")
-    ax[2, 0].set_aspect("equal")
-    ax[2, 0].set_xlabel("r [mm]")
-    ax[2, 0].set_ylabel("sag z [mm]")
-    ax[2, 0].set_title(f"Refracting surfaces (O = {O:.0f} m⁻¹, R = {1e3/O:.2f} mm)")
-    ax[2, 0].legend(fontsize=8, loc="upper center")
-    ax[2, 0].grid(alpha=0.3)
-
-    ax[2, 1].plot(r * 1e3, (z_o - z_p) * 1e6, "C0")
-    ax[2, 1].set_xlabel("r [mm]")
-    ax[2, 1].set_ylabel("z_oval − z_parabola [µm]")
-    ax[2, 1].set_title("Shape difference (∝ r⁴)")
-    ax[2, 1].grid(alpha=0.3)
-
-    ax[2, 2].plot(r * 1e3, W_p, "C3", label="parabola")
-    ax[2, 2].plot(r * 1e3, geometric_opd_waves(z_o, r), "C2", label="Cartesian oval (≡ 0)")
-    ax[2, 2].set_xlabel("r [mm]")
-    ax[2, 2].set_ylabel("OPD [waves]")
-    ax[2, 2].set_title("Exact geometric spherical aberration")
-    ax[2, 2].legend()
-    ax[2, 2].grid(alpha=0.3)
-
-    # Row 3 — through-focus axial response, PSF profiles, encircled energy.
-    ax[3, 0].plot(zs * 1e3, F_o / I0, "C2", label="Cartesian oval")
-    ax[3, 0].plot(zs * 1e3, F_p / I0, "C3", label="parabola")
-    ax[3, 0].axvline(ZI * 1e3, color="gray", ls="--", lw=0.8)
-    ax[3, 0].set_xlabel("z [mm]")
-    ax[3, 0].set_ylabel("I(0, z) / oval peak")
-    ax[3, 0].set_title("Through-focus axial response")
-    ax[3, 0].legend()
-    ax[3, 0].grid(alpha=0.3)
-
-    ax[3, 1].semilogy(r_out * 1e6, P_o, "C2", label="oval @ design plane")
-    ax[3, 1].semilogy(r_out * 1e6, airy, "k--", lw=1, label="analytic Airy")
-    ax[3, 1].semilogy(r_out * 1e6, P_p, "C3", label="parabola @ design plane")
-    ax[3, 1].semilogy(r_out * 1e6, P_pb, "C1", lw=1,
-                      label=f"parabola @ best focus ({z_best*1e3:.2f} mm)")
-    ax[3, 1].set_ylim(1e-7, 2)
-    ax[3, 1].set_xlabel("r [µm]")
-    ax[3, 1].set_ylabel("I / oval peak")
-    ax[3, 1].set_title("PSF profiles")
-    ax[3, 1].legend(fontsize=8)
-    ax[3, 1].grid(alpha=0.3)
-
-    ax[3, 2].plot(r_out * 1e6, encircled(P_o), "C2", label="oval @ design")
-    ax[3, 2].plot(r_out * 1e6, encircled(P_p), "C3", label="parabola @ design")
-    ax[3, 2].plot(r_out * 1e6, encircled(P_pb), "C1", label="parabola @ best focus")
-    ax[3, 2].axhline(0.838, color="gray", lw=0.8, ls=":")
-    ax[3, 2].set_xlabel("r [µm]")
-    ax[3, 2].set_ylabel("encircled energy")
-    ax[3, 2].set_title("Encircled energy (83.8% = Airy disc)")
-    ax[3, 2].legend(fontsize=8)
-    ax[3, 2].grid(alpha=0.3)
-
-    fig.suptitle(
+    fig1.suptitle(
         f"Cartesian oval vs paraboloid at NA = {na:.2f}  "
         f"(zo = {ZO*1e3:.0f} mm, zi = {ZI*1e3:.0f} mm, n1 = {N1}, n2 = {N2}, "
-        f"aperture {R_AP*1e3:.1f} mm, λ = {WAVELENGTH*1e9:.0f} nm)",
+        f"aperture {R*1e3:.2f} mm, λ = {WAVELENGTH*1e9:.0f} nm)",
         fontsize=12,
     )
+
+    # ======================= Figure 2 — metrics ==============================
+    fig2, ax2 = plt.subplots(2, 3, figsize=(15, 8.6), constrained_layout=True)
+
+    ax2[0, 0].plot(r * 1e3, (z_o - z_p) * 1e6, "C0")
+    ax2[0, 0].set_xlabel("r [mm]")
+    ax2[0, 0].set_ylabel("z_oval − z_parabola [µm]")
+    ax2[0, 0].set_title("Shape difference (∝ r⁴)")
+    ax2[0, 0].grid(alpha=0.3)
+
+    ax2[0, 1].plot(r * 1e3, W_p, "C3", label="parabola")
+    ax2[0, 1].plot(r * 1e3, geometric_opd_waves(z_o, r), "C2", label="Cartesian oval (≡ 0)")
+    ax2[0, 1].set_xlabel("r [mm]")
+    ax2[0, 1].set_ylabel("OPD [waves]")
+    ax2[0, 1].set_title("Exact geometric spherical aberration")
+    ax2[0, 1].legend()
+    ax2[0, 1].grid(alpha=0.3)
+
+    ax2[0, 2].plot(zs * 1e3, F_o / I0, "C2", label="Cartesian oval")
+    ax2[0, 2].plot(zs * 1e3, F_p / I0, "C3", label="parabola")
+    ax2[0, 2].axvline(ZI * 1e3, color="gray", ls="--", lw=0.8)
+    ax2[0, 2].set_xlabel("z [mm]")
+    ax2[0, 2].set_ylabel("I(0, z) / oval peak")
+    ax2[0, 2].set_title("Through-focus axial response")
+    ax2[0, 2].legend()
+    ax2[0, 2].grid(alpha=0.3)
+
+    ax2[1, 0].semilogy(r_out * 1e6, P_o, "C2", label="oval @ design")
+    ax2[1, 0].semilogy(r_out * 1e6, airy, "k--", lw=1, label="analytic Airy")
+    ax2[1, 0].semilogy(r_out * 1e6, P_p, "C3", label="parabola @ design")
+    ax2[1, 0].semilogy(r_out * 1e6, P_pb, "C1", lw=1, label=f"parabola @ best ({z_best*1e3:.2f} mm)")
+    ax2[1, 0].set_ylim(1e-7, 2)
+    ax2[1, 0].set_xlabel("r [µm]")
+    ax2[1, 0].set_ylabel("I / oval peak")
+    ax2[1, 0].set_title("PSF profiles")
+    ax2[1, 0].legend(fontsize=8)
+    ax2[1, 0].grid(alpha=0.3)
+
+    ax2[1, 1].plot(r_out * 1e6, encircled(P_o), "C2", label="oval @ design")
+    ax2[1, 1].plot(r_out * 1e6, encircled(P_p), "C3", label="parabola @ design")
+    ax2[1, 1].plot(r_out * 1e6, encircled(P_pb), "C1", label="parabola @ best")
+    ax2[1, 1].axhline(0.838, color="gray", lw=0.8, ls=":")
+    ax2[1, 1].set_xlabel("r [µm]")
+    ax2[1, 1].set_ylabel("encircled energy")
+    ax2[1, 1].set_title("Encircled energy (83.8% = Airy disc)")
+    ax2[1, 1].legend(fontsize=8)
+    ax2[1, 1].grid(alpha=0.3)
+
+    ax2[1, 2].axis("off")
+    summary = (
+        f"NA (image)   = {na:.3f}\n"
+        f"aperture R   = {R*1e3:.2f} mm\n"
+        f"O            = {O:.0f} m⁻¹\n"
+        f"R_c = 1/O    = {1e3/O:.2f} mm\n"
+        f"\n"
+        f"parabola spherical aberration\n"
+        f"  PV  = {np.ptp(W_p):.1f} waves\n"
+        f"  RMS = {np.std(W_p):.1f} waves\n"
+        f"\n"
+        f"Strehl (oval)            ≈ 1.00\n"
+        f"Strehl (parab @ design)  = {P_p[0]:.3f}\n"
+        f"Strehl (parab @ best)    = {P_pb[0]:.3f}\n"
+        f"\n"
+        f"best on-axis plane = {z_best*1e3:.2f} mm\n"
+        f"design plane       = {ZI*1e3:.1f} mm"
+    )
+    ax2[1, 2].text(0.0, 0.98, summary, transform=ax2[1, 2].transAxes,
+                   va="top", ha="left", fontsize=10, family="monospace")
+
+    fig2.suptitle("Cartesian oval vs paraboloid — quantitative metrics", fontsize=12)
+
     plt.show()
 
 
