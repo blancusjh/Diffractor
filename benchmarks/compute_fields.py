@@ -170,7 +170,12 @@ def ball_fields(a=6.0, n1=1.0, n2=2.5, n_elem=900):
     zg = np.linspace(-1.6 * a, 1.6 * a, 340)
     rg = np.linspace(0.0, 1.6 * a, 170)
     RG, ZG = np.meshgrid(rg, zg, indexing="ij")
+    inside = np.hypot(RG, ZG) < 0.97 * a
+    outside = np.hypot(RG, ZG) > 1.03 * a
+
+    t0 = time.time()
     psi = b.field_grid(RG.ravel(), ZG.ravel()).reshape(RG.shape)
+    print(f"    exact series ({RG.size} pts) in {time.time()-t0:.0f}s")
 
     from groundtruth.bem import sphere_generator
     g = sphere_generator(a, n_elem)
@@ -180,13 +185,36 @@ def ball_fields(a=6.0, n1=1.0, n2=2.5, n_elem=900):
     vi = 1j * b.k1 * g.n_z * ui
     t0 = time.time()
     u, v, _ = solve_muller(g, b.k1, b.k2, ui, vi)
+    print(f"    BEM solve N={g.N} in {time.time()-t0:.0f}s")
+
     z_ax = np.linspace(-0.85 * a, 0.85 * a, 200)
     bem_ax = field_map(g, b.k2, u, v, np.zeros_like(z_ax), z_ax, n_phi=64)
     exact_ax = b.field_grid(np.zeros_like(z_ax), z_ax)
-    print(f"    BEM N={g.N} in {time.time()-t0:.0f}s;  axial agreement "
+    print(f"    axial agreement "
           f"{np.abs(bem_ax-exact_ax).max()/np.abs(exact_ax).max():.2e}")
 
-    np.savez(OUT + "ball_fields.npz", rg=rg, zg=zg, psi=psi, a=a, zf=zf,
+    psi_bem = np.full(RG.shape, np.nan, dtype=complex)
+    t0 = time.time()
+    psi_bem[inside] = field_map(g, b.k2, u, v, RG[inside], ZG[inside], n_phi=32)
+    print(f"    BEM interior ({inside.sum()} pts) in {time.time()-t0:.0f}s")
+
+    def inc_pair(rho_s, z_s):
+        p = np.exp(1j * b.k1 * z_s)
+        return p, 1j * b.k1 * g.n_z * p
+
+    t0 = time.time()
+    psi_bem[outside] = (np.exp(1j * b.k1 * ZG[outside])
+                        + field_map(g, b.k1, u, v, RG[outside], ZG[outside],
+                                    n_phi=32, exterior=True, incident=inc_pair))
+    print(f"    BEM exterior ({outside.sum()} pts) in {time.time()-t0:.0f}s")
+
+    valid = inside | outside
+    err = np.abs(psi_bem - psi)
+    peak = np.abs(psi[valid]).max()
+    print(f"    max pointwise |error|/peak = {err[valid].max()/peak:.2e}")
+
+    np.savez(OUT + "ball_fields.npz", rg=rg, zg=zg, psi=psi, psi_bem=psi_bem,
+             inside=inside, outside=outside, a=a, zf=zf,
              n1=n1, n2=n2, z_ax=z_ax, bem_ax=bem_ax, exact_ax=exact_ax,
              N=g.N, x1=b.x1)
     print("    -> ball_fields.npz")
