@@ -293,138 +293,85 @@ def fig_spheres():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FIGURE 4 — large dielectric ball, exact scalar series
+# FIGURES 4 & 5 — exact vs BEM for each ball size
 # ══════════════════════════════════════════════════════════════════════════════
-def fig_ball_large():
-    BL = np.load(G + "ball_fields.npz")
-    MC = np.load(G + "method_check.npz")
+def _ball_figure(D, fig_path, suptitle, decades=2.5):
+    """Exact | BEM | error on log scale for a dielectric ball."""
+    aa = float(D["a"])
+    rg, zg = D["rg"], D["zg"]
+    psi_exact = D["psi"] if "psi" in D else D["psi_exact"]
+    psi_bem = D["psi_bem"]
+    inside = D["inside"]
+    valid = inside | D["outside"] if "outside" in D else inside
 
-    fig, ax = plt.subplots(1, 3, figsize=(18.0, 5.8))
+    fig, axes = plt.subplots(1, 3, figsize=(18.0, 5.8))
+    circ = np.linspace(0, 2 * np.pi, 400)
 
-    # (a) 2D exact field map
-    a = ax[0]
-    rg, zg, psi = BL["rg"], BL["zg"], BL["psi"]
-    rr, PP = mirror(rg, psi)
-    A = np.abs(PP)
-    im = a.imshow(A, extent=[zg[0], zg[-1], rr[0], rr[-1]], origin="lower",
-                  aspect="equal", cmap="magma", vmin=0,
-                  vmax=np.percentile(A, 99.5), interpolation="bilinear")
-    aa = float(BL["a"]); t = np.linspace(0, 2 * np.pi, 400)
-    a.plot(aa * np.cos(t), aa * np.sin(t), color=EDGE, lw=1.6)
-    a.set_xlabel("z  [λ]"); a.set_ylabel("r  [λ]"); a.grid(False)
-    fig.colorbar(im, ax=a, fraction=0.046, pad=0.03).set_label("|ψ|", fontsize=8.5)
-    ttl(a, "Meridional |ψ|, exact series",
-        f"a = {float(BL['a']):.0f}λ, n₁ = {float(BL['n1'])}, "
-        f"n₂ = {float(BL['n2'])}, k₁a = {float(BL['x1']):.1f} · "
-        f"plane wave from −z")
+    # shared log-scale field panel
+    rr_ex, PP_ex = mirror(rg, psi_exact)
+    log_ref = np.log10(np.maximum(np.abs(PP_ex), 1e-10))
+    vmax = np.nanpercentile(log_ref, 99.5)
+    vmin = vmax - decades
 
-    # (b) axial profile, BEM vs exact
-    a = ax[1]
-    z_ax, be, ex = BL["z_ax"], BL["bem_ax"], BL["exact_ax"]
-    a.plot(z_ax, np.abs(ex), color=GREEN, lw=3.0, label="exact series")
-    a.plot(z_ax, np.abs(be), color=RED, lw=1.6, ls=(0, (5, 3)),
-           label="Müller BOR-BEM")
-    a.set_xlabel("z  [λ]"); a.set_ylabel("|ψ| on the axis")
-    a.legend(fontsize=9)
-    ttl(a, "Axial profile, exact vs BEM",
-        f"N = {int(BL['N'])} panels · "
-        f"max rel. difference "
-        f"{np.abs(be - ex).max() / np.abs(ex).max():.1e}")
-
-    # (c) convergence envelope
-    a = ax[2]
-    k2a_e, err, nn = MC["env_k2a"], MC["env_err"], MC["env_n2"]
-    for val, col, mk in ((1.5, BLUE, "o"), (2.5, VIOLET, "s")):
-        m = nn == val
-        a.semilogy(k2a_e[m], err[m], mk + "-", color=col, lw=2.2, ms=7,
-                   label=f"n₂ = {val}")
-    a.axhline(1e-2, color=MUTED, lw=1.4, ls=(0, (6, 4)))
-    a.text(11, 1.3e-2, "1 %", fontsize=8.5, color=MUTED)
-    a.set_xlabel("k₂a")
-    a.set_ylabel("max rel. error in u on the surface")
-    a.legend(fontsize=9, loc="lower right")
-    ttl(a, "BEM error versus electrical size",
-        "64–100 panels per interior wavelength throughout")
-
-    fig.suptitle(f"Exact scalar solution for a dielectric ball  "
-                 f"(a = {float(BL['a']):.0f}λ, n₁ = {float(BL['n1'])}, "
-                 f"n₂ = {float(BL['n2'])})",
-                 fontsize=12.5, fontweight="bold", x=0.006, ha="left", y=1.03)
-    fig.tight_layout()
-    fig.savefig(OUT + "f4_ball_large.png", dpi=170, bbox_inches="tight",
-                facecolor=SURF)
-    plt.close(fig)
-    print("f4_ball_large.png")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# FIGURE 5 — BEM vs exact scalar series, well-resolved ball
-# ══════════════════════════════════════════════════════════════════════════════
-def fig_ball_comparison():
-    BC = np.load(G + "ball_comparison.npz")
-    a_c = float(BC["a"])
-    n1_c, n2_c = float(BC["n1"]), float(BC["n2"])
-    k2a_c, N_c = float(BC["k2a"]), int(BC["N"])
-    inside_c = BC["inside"]
-    if "outside" in BC:
-        valid = inside_c | BC["outside"]
-    else:
-        valid = inside_c
-
-    fig, ax = plt.subplots(1, 3, figsize=(18.0, 5.8))
-    rg_c, zg_c = BC["rg"], BC["zg"]
-    psi_exact, psi_bem = BC["psi_exact"], BC["psi_bem"]
-
-    def ball_panel(a_, psi, title, sub, vmax=None):
-        rr, PP = mirror(rg_c, np.abs(psi))
-        if vmax is None:
-            vmax = np.nanpercentile(np.abs(PP), 99.5)
-        im = a_.imshow(np.abs(PP),
-                       extent=[zg_c[0], zg_c[-1], rr[0], rr[-1]],
-                       origin="lower", aspect="equal", cmap="magma",
-                       vmin=0, vmax=vmax, interpolation="bilinear")
-        t = np.linspace(0, 2 * np.pi, 400)
-        a_.plot(a_c * np.cos(t), a_c * np.sin(t), color=EDGE, lw=1.6)
-        a_.set_xlabel("z  [λ]"); a_.set_ylabel("r  [λ]"); a_.grid(False)
-        fig.colorbar(im, ax=a_, fraction=0.046, pad=0.03).set_label(
-            "|ψ|", fontsize=8.5)
-        ttl(a_, title, sub)
-        return vmax
-
-    vm = ball_panel(ax[0], psi_exact,
-                    "Exact scalar series",
-                    f"a = {a_c}λ, n₁ = {n1_c}, n₂ = {n2_c}, "
-                    f"k₂a = {k2a_c:.1f} · plane wave from −z")
-    ball_panel(ax[1], psi_bem,
-               "Müller BOR-BEM",
-               f"N = {N_c} panels · interior + exterior field", vmax=vm)
+    for i, (psi, title, sub) in enumerate([
+            (psi_exact, "Exact scalar series",
+             f"a = {aa}λ, n₁ = {float(D['n1'])}, n₂ = {float(D['n2'])}, "
+             f"k₁a = {float(D['x1']):.1f} · plane wave from −z"),
+            (psi_bem, "Müller BOR-BEM",
+             f"N = {int(D['N'])} panels · interior + exterior field")]):
+        a = axes[i]
+        rr, PP = mirror(rg, psi)
+        logA = np.log10(np.maximum(np.abs(PP), 10 ** vmin))
+        im = a.imshow(logA, extent=[zg[0], zg[-1], rr[0], rr[-1]],
+                      origin="lower", aspect="equal", cmap="magma",
+                      vmin=vmin, vmax=vmax, interpolation="bilinear")
+        a.plot(aa * np.cos(circ), aa * np.sin(circ), color=EDGE, lw=1.6)
+        a.set_xlabel("z  [λ]"); a.set_ylabel("r  [λ]"); a.grid(False)
+        fig.colorbar(im, ax=a, fraction=0.046, pad=0.03).set_label(
+            "log₁₀ |ψ|", fontsize=8.5)
+        ttl(a, title, sub)
 
     # error map
+    a = axes[2]
     err = np.abs(psi_bem - psi_exact)
     peak = np.abs(psi_exact[valid]).max()
-    err_rel = err / peak
-    err_rel[~valid] = np.nan
-    rr_e, EE = mirror(rg_c, err_rel)
-    im = ax[2].imshow(np.log10(np.maximum(np.abs(EE), 1e-6)),
-                      extent=[zg_c[0], zg_c[-1], rr_e[0], rr_e[-1]],
-                      origin="lower", aspect="equal", cmap="inferno",
-                      vmin=-5, vmax=-2, interpolation="bilinear")
-    t = np.linspace(0, 2 * np.pi, 400)
-    ax[2].plot(a_c * np.cos(t), a_c * np.sin(t), color=EDGE, lw=1.6)
-    ax[2].set_xlabel("z  [λ]"); ax[2].set_ylabel("r  [λ]"); ax[2].grid(False)
-    fig.colorbar(im, ax=ax[2], fraction=0.046, pad=0.03).set_label(
+    err_rel = np.full_like(err, np.nan)
+    err_rel[valid] = err[valid] / peak
+    rr_e, EE = mirror(rg, err_rel)
+    emax = np.log10(max(err[valid].max() / peak, 1e-6))
+    emin = emax - 3.0
+    im = a.imshow(np.log10(np.maximum(np.abs(EE), 10 ** emin)),
+                  extent=[zg[0], zg[-1], rr_e[0], rr_e[-1]],
+                  origin="lower", aspect="equal", cmap="inferno",
+                  vmin=emin, vmax=emax, interpolation="bilinear")
+    a.plot(aa * np.cos(circ), aa * np.sin(circ), color=EDGE, lw=1.6)
+    a.set_xlabel("z  [λ]"); a.set_ylabel("r  [λ]"); a.grid(False)
+    fig.colorbar(im, ax=a, fraction=0.046, pad=0.03).set_label(
         "log₁₀ ( |error| / peak )", fontsize=8.5)
-    ttl(ax[2], "Pointwise error",
+    ttl(a, "Pointwise error",
         f"max |BEM − exact| / peak = {err[valid].max()/peak:.1e}")
 
-    fig.suptitle(f"Müller BOR-BEM vs exact scalar series  "
-                 f"(a = {a_c}λ, n₁ = {n1_c}, n₂ = {n2_c}, N = {N_c})",
+    fig.suptitle(suptitle,
                  fontsize=12.5, fontweight="bold", x=0.006, ha="left", y=1.03)
     fig.tight_layout()
-    fig.savefig(OUT + "f5_ball_comparison.png", dpi=170, bbox_inches="tight",
-                facecolor=SURF)
+    fig.savefig(OUT + fig_path, dpi=170, bbox_inches="tight", facecolor=SURF)
     plt.close(fig)
-    print("f5_ball_comparison.png")
+    print(fig_path)
+
+
+def fig_ball_large():
+    BL = np.load(G + "ball_fields.npz")
+    _ball_figure(BL, "f4_ball_large.png",
+                 f"Exact vs Müller BOR-BEM for a dielectric ball  "
+                 f"(a = {float(BL['a']):.0f}λ, n₂ = {float(BL['n2'])})")
+
+
+def fig_ball_comparison():
+    BC = np.load(G + "ball_comparison.npz")
+    _ball_figure(BC, "f5_ball_comparison.png",
+                 f"Exact vs Müller BOR-BEM for a dielectric ball  "
+                 f"(a = {float(BC['a'])}λ, n₂ = {float(BC['n2'])}, "
+                 f"N = {int(BC['N'])})")
 
 
 if __name__ == "__main__":
