@@ -189,7 +189,7 @@ def _batched(field_idx, src_idx, s_nodes, w_nodes, g, k1, k2, cphi, wphi,
 
 
 def assemble_muller(g: Generator, k1, k2, n_phi=None, n_near=5, ng_near=8,
-                    ng_smooth=1, block=48):
+                    ng_smooth=1, block=None):
     """Assemble dS, dK, dK', dT.
 
     dS, dK, dK' have smooth kernels, so two Gauss points per source panel
@@ -204,6 +204,10 @@ def assemble_muller(g: Generator, k1, k2, n_phi=None, n_near=5, ng_near=8,
     if n_phi is None:
         kmax = max(abs(k1), abs(k2))
         n_phi = max(24, int(np.ceil(8.0 * kmax * g.rho.max() / np.pi)))
+    if block is None:
+        # the base pass holds ~20 temporaries of shape (block, N, n_phi);
+        # cap that at 2e6 elements each, the same budget _batched uses.
+        block = int(np.clip(2.0e6 / (N * n_phi), 1, 48))
     xg, wg = _gauss(n_phi)
     phi = 0.5 * np.pi * (xg + 1.0)
     wphi = 0.5 * np.pi * wg * 2.0

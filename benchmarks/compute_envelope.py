@@ -31,8 +31,7 @@ def surface_error(a, n2, N, n1=1.0):
     vi = 1j * b.k1 * g.n_z * ui
     u, v, M = solve_muller(g, b.k1, b.k2, ui, vi)
     ue = b.surface_field(g.z / a)
-    err = np.abs(u - ue).max() / np.abs(ue).max()
-    return err, np.linalg.cond(M)
+    return np.abs(u - ue).max() / np.abs(ue).max()
 
 
 def envelope():
@@ -44,15 +43,15 @@ def envelope():
             # meridian length is pi*a = (k2a/2) interior wavelengths
             N = int(round(PPL2 * k2a / 2))
             t0 = time.time()
-            err, cond = surface_error(a, n2, N)
-            rows.append((k2a, n2, err, cond))
+            err = surface_error(a, n2, N)
+            rows.append((k2a, n2, err))
             print(f"  n2={n2}  k2a={k2a:6.1f}  N={N:5d}  err={err:.3e}  "
-                  f"cond={cond:.1f}  ({time.time()-t0:.0f}s)", flush=True)
+                  f"({time.time()-t0:.0f}s)", flush=True)
 
     rows = np.array(rows)
     old = dict(np.load(OUT + "method_check.npz"))
-    old.update(env_k2a=rows[:, 0], env_n2=rows[:, 1],
-               env_err=rows[:, 2], env_cond=rows[:, 3])
+    old.pop("env_cond", None)          # never plotted; the SVD dominated the run
+    old.update(env_k2a=rows[:, 0], env_n2=rows[:, 1], env_err=rows[:, 2])
     np.savez(OUT + "method_check.npz", **old)
     print("  -> method_check.npz")
 
