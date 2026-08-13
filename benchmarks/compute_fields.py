@@ -1,11 +1,10 @@
 """Compute the scalar field maps used in the field figures.
 
-Two runs of the same stigmatic body are stored: a lossless interior
-(n2 real) and a weakly absorbing one (n2 = 1.5 + 0.01i).  The body has to
-be closed for the boundary-integral formulation, and a closed lossless
-dielectric is a resonator; the absorbing run damps the multiply-reflected
-field while leaving the direct converging beam nearly intact, so the two
-runs bracket how much of the map is direct and how much is trapped.
+The stigmatic body is solved once with a lossless interior (n2 real).
+The body has to be closed for the boundary-integral formulation; a closed
+lossless dielectric is a resonator, so the field contains both the direct
+converging beam and trapped modes.  The tangent-plane model on the cap alone
+isolates the direct beam without multiple scattering.
 """
 
 import time
@@ -23,15 +22,15 @@ OUT = str(Path(__file__).resolve().parent / "golden") + "/"
 
 
 # ══ 1. stigmatic ovoid, solved by Muller BOR-BEM ══════════════════════════════
-def ovoid_fields(zi=8.0, ppl=32.0, n1=1.0, n2=1.5, kappa=0.0, tag=""):
+def ovoid_fields(zi=8.0, ppl=32.0, n1=1.0, n2=1.5):
     zo, k0 = -2.0 * zi, 2 * np.pi / LAM
-    k1, k2 = k0 * n1, k0 * (n2 + 1j * kappa)
+    k1, k2 = k0 * n1, k0 * n2
     g = ovoid_body(n1, n2, zo, zi, LAM, ppl=ppl)
     m, g0, ov = g.meta, g.meta["g0"], g.meta["ov"]
     u_inc, v_inc = point_source_cauchy(g, k1, zo)
     t0 = time.time()
     u, v, _ = solve_muller(g, k1, k2, u_inc, v_inc)
-    print(f"  ovoid zi={zi}λ kappa={kappa}: N={g.N}, solved in {time.time()-t0:.0f}s")
+    print(f"  ovoid zi={zi}λ: N={g.N}, solved in {time.time()-t0:.0f}s")
 
     r_rim, z_rim, z_end, z_apex = (m["r_rim"], m["z_rim"], m["z_end"], m["z_apex"])
     cap_r, cap_z = g0["r"], g0["z"]
@@ -98,7 +97,7 @@ def ovoid_fields(zi=8.0, ppl=32.0, n1=1.0, n2=1.5, kappa=0.0, tag=""):
 
     # ray pupil, and the same pupil propagated diffractively (Debye-Wolf)
     ts = 2 * n1 * g0["cos_i1"] / (n1 * g0["cos_i1"] + n2 * g0["cos_i2"])
-    P_ray = ts * g0["d2"] / g0["d1"] / (4 * np.pi) * np.exp(-k0 * kappa * g0["d2"])
+    P_ray = ts * g0["d2"] / g0["d1"] / (4 * np.pi)
     A2_ray = np.interp(th2, g0["th2"], P_ray, right=0.0)
     meas = P_ray * g0["w2"]
 
@@ -111,17 +110,17 @@ def ovoid_fields(zi=8.0, ppl=32.0, n1=1.0, n2=1.5, kappa=0.0, tag=""):
     dw_tr = debye(r_tr, np.zeros_like(r_tr))
     dw_ax = debye(np.zeros_like(z_ax), z_ax - zi)
 
-    np.savez(OUT + f"ovoid_fields{tag}.npz",
+    np.savez(OUT + "ovoid_fields.npz",
              rg=rg, zg=zg, psi=psi, inside=inside, cap_r=cap_r, cap_z=cap_z,
              r_rim=r_rim, z_rim=z_rim, z_end=z_end, z_apex=z_apex,
              zi=zi, zo=zo, NA=m["NA"], N=g.N, airy=airy, n1=n1, n2=n2,
-             kappa=kappa, th1max=g0["th1"][-1], th2max=g0["th2"][-1],
+             th1max=g0["th1"][-1], th2max=g0["th2"][-1],
              r_tr=r_tr, psi_tr=psi_tr, dw_tr=dw_tr,
              z_ax=z_ax, psi_ax=psi_ax, dw_ax=dw_ax,
              th1=th1, A1=A1, A1_inc=A1_inc, R1=R1,
              th2=th2, A2=A2, A2_ray=A2_ray, A2_dw=A2_dw, R2=R2,
              opl=ov.C, k0=k0, k2=k2, ppl=ppl)
-    print(f"    -> ovoid_fields{tag}.npz")
+    print("    -> ovoid_fields.npz")
 
 
 # ══ 1b. the same body, tangent-plane model instead of a solver ═══════════════
@@ -195,7 +194,6 @@ def ball_fields(a=6.0, n1=1.0, n2=2.5, n_elem=900):
 
 if __name__ == "__main__":
     print("computing field maps")
-    ovoid_fields(kappa=0.0, tag="")
+    ovoid_fields()
     ovoid_po()
-    ovoid_fields(kappa=0.01, tag="_abs")
     ball_fields()

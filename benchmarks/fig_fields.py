@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 _HERE = Path(__file__).resolve().parent
 G = str(_HERE / "golden") + "/"
 OV = np.load(G + "ovoid_fields.npz")
-AB = np.load(G + "ovoid_fields_abs.npz")
 BL = np.load(G + "ball_fields.npz")
 MC = np.load(G + "method_check.npz")
 PO = np.load(G + "ovoid_po.npz")
@@ -52,11 +51,9 @@ def focal_value(D, grid=None):
 # FIGURE 1 — meridional sections of the stigmatic ovoid
 # ══════════════════════════════════════════════════════════════════════════════
 def fig_longitudinal():
-    fig, ax = plt.subplots(3, 1, figsize=(15.0, 15.2))
+    fig, ax = plt.subplots(2, 1, figsize=(15.0, 10.5))
     rows = [(ax[0], OV, "Boundary-integral solution, lossless interior  n₂ = 1.5"),
-            (ax[1], AB, "Boundary-integral solution, absorbing interior  "
-                        "n₂ = 1.5 + 0.01i"),
-            (ax[2], None, "Tangent-plane model on the cap alone,  n₂ = 1.5")]
+            (ax[1], None, "Tangent-plane model on the cap alone,  n₂ = 1.5")]
 
     for a, D, head in rows:
         model = D is None
@@ -129,11 +126,11 @@ def fig_longitudinal():
 # ══════════════════════════════════════════════════════════════════════════════
 def fig_focal():
     fig, ax = plt.subplots(1, 3, figsize=(16.8, 5.4))
-    airy = float(AB["airy"]); zi = float(AB["zi"])
+    airy = float(OV["airy"]); zi = float(OV["zi"])
 
     # (a) focal plane, revolved from the axisymmetric radial profile
     a = ax[0]
-    r_tr, I = AB["r_tr"], np.abs(AB["psi_tr"]) ** 2
+    r_tr, I = OV["r_tr"], np.abs(OV["psi_tr"]) ** 2
     xs = np.linspace(-r_tr[-1], r_tr[-1], 320)
     X, Y = np.meshgrid(xs, xs)
     img = np.interp(np.hypot(X, Y).ravel(), r_tr, I / I.max(),
@@ -149,13 +146,11 @@ def fig_focal():
     a.grid(False)
     cb = fig.colorbar(im, ax=a, fraction=0.046, pad=0.03)
     cb.set_label("log₁₀ ( I / I_max )", fontsize=8.5)
-    ttl(a, "Focal plane, absorbing interior",
+    ttl(a, "Focal plane",
         f"z = {zi:.0f}λ · Airy radius 0.61λ/NA = {airy:.3f}λ · "
         f"circles at 1, 2, 3 Airy radii")
 
-    CURVES = [("BEM, whole closed body, n₂ real", RED, "-", 2.2, OV, "psi"),
-              ("BEM, whole closed body, n₂ = 1.5 + 0.01i", VIOLET, "-", 2.0,
-               AB, "psi"),
+    CURVES = [("BEM, whole closed body", RED, "-", 2.2, OV, "psi"),
               ("tangent-plane model on the cap", BLUE, (0, (5, 2)), 2.0,
                PO, "psi"),
               ("Debye–Wolf from the ray pupil P = t_s d₂/d₁", GREEN,
@@ -191,15 +186,15 @@ def fig_focal():
         f"{float(OV['r_rim'])**2*1.5/zi:.2f}")
 
     fig.suptitle("Focal region of the stigmatic ovoid  "
-                 f"(z_i = {zi:.0f}λ, NA = {float(AB['NA']):.3f})",
+                 f"(z_i = {zi:.0f}λ, NA = {float(OV['NA']):.3f})",
                  fontsize=12.5, fontweight="bold", x=0.006, ha="left", y=1.02)
     fig.text(0.006, -0.035,
-             "The four curves differ in what they include: the two BEM curves "
-             "solve the Helmholtz transmission problem for the whole closed "
-             "body (cap + cylinder + cone), with a lossless and an absorbing "
-             "interior; the tangent-plane curve carries a field on the cap "
-             "only; the Debye–Wolf curve replaces the diffraction integral by "
-             "its large-Fresnel-number limit.", fontsize=8.5, color=INK2)
+             "The three curves differ in what they include: the BEM curve "
+             "solves the Helmholtz transmission problem for the whole closed "
+             "body (cap + cylinder + cone); the tangent-plane curve carries "
+             "a field on the cap only; the Debye–Wolf curve replaces the "
+             "diffraction integral by its large-Fresnel-number limit.",
+             fontsize=8.5, color=INK2)
     fig.tight_layout()
     fig.savefig(OUT + "f2_focal.png", dpi=170, bbox_inches="tight", facecolor=SURF)
     plt.close(fig)
@@ -215,9 +210,8 @@ def fig_spheres():
 
     # ---- S1 : amplitude -----------------------------------------------------
     a = ax[0, 0]
-    for D, col, lab in ((OV, RED, "n₂ real"), (AB, VIOLET, "n₂ = 1.5 + 0.01i")):
-        t1 = np.degrees(D["th1"]); ref = np.abs(D["A1_inc"])
-        a.plot(t1, np.abs(D["A1"]) / ref, color=col, lw=1.8, label="total, " + lab)
+    t1 = np.degrees(OV["th1"]); ref = np.abs(OV["A1_inc"])
+    a.plot(t1, np.abs(OV["A1"]) / ref, color=RED, lw=1.8, label="total field")
     a.axhline(1.0, color=GREEN, lw=2.0, label="incident point source alone")
     a.set_xlim(0, np.degrees(float(OV["th1"][-1])))
     a.set_xlabel(r"$\theta_1$  [deg]")
@@ -229,10 +223,9 @@ def fig_spheres():
 
     # ---- S1 : phase ---------------------------------------------------------
     a = ax[0, 1]
-    for D, col, lab in ((OV, RED, "n₂ real"), (AB, VIOLET, "n₂ = 1.5 + 0.01i")):
-        t1 = np.degrees(D["th1"])
-        ph = np.angle(D["A1"] / D["A1_inc"]) / (2 * np.pi)
-        a.plot(t1, ph, color=col, lw=1.8, label="total, " + lab)
+    t1 = np.degrees(OV["th1"])
+    ph = np.angle(OV["A1"] / OV["A1_inc"]) / (2 * np.pi)
+    a.plot(t1, ph, color=RED, lw=1.8, label="total field")
     a.axhline(0.0, color=GREEN, lw=2.0, label="incident point source alone")
     a.set_xlim(0, np.degrees(float(OV["th1"][-1])))
     a.set_xlabel(r"$\theta_1$  [deg]"); a.set_ylabel("phase  [waves]")
@@ -243,14 +236,10 @@ def fig_spheres():
     # ---- S2 : amplitude -----------------------------------------------------
     a = ax[1, 0]
     thm = np.degrees(float(OV["th2max"]))
-    n0 = float(np.abs(AB["A2_ray"][0]))
     n0 = float(np.abs(OV["A2_ray"][0]))
     t2 = np.degrees(OV["th2"])
     a.plot(t2, np.abs(OV["A2"]) / n0, color=RED, lw=2.2,
-           label="BEM, whole closed body, n₂ real")
-    a.plot(np.degrees(AB["th2"]),
-           np.abs(AB["A2"]) / float(np.abs(AB["A2_ray"][0])), color=VIOLET,
-           lw=2.0, label="BEM, n₂ = 1.5 + 0.01i (own P(0))")
+           label="BEM, whole closed body")
     a.plot(np.degrees(PO["th2"]), np.abs(PO["A2"]) / n0, color=BLUE, lw=2.0,
            ls=(0, (5, 2)), label="tangent-plane model on the cap")
     a.plot(t2, np.abs(OV["A2_dw"]) / n0, color=GREEN, lw=2.0, ls=(0, (1.6, 2)),
@@ -277,8 +266,7 @@ def fig_spheres():
         return (p - p[0]) / (2 * np.pi)
 
     for A, th, col, ls, lab in (
-            (OV["A2"], OV["th2"], RED, "-", "BEM, whole closed body, n₂ real"),
-            (AB["A2"], AB["th2"], VIOLET, "-", "BEM, n₂ = 1.5 + 0.01i"),
+            (OV["A2"], OV["th2"], RED, "-", "BEM, whole closed body"),
             (PO["A2"], PO["th2"], BLUE, (0, (5, 2)),
              "tangent-plane model on the cap"),
             (OV["A2_dw"], OV["th2"], GREEN, (0, (1.6, 2)),
