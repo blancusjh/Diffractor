@@ -42,21 +42,29 @@ def _kernels(Rq, Zq, g, k, cphi, sphi, wphi):
     return S, D
 
 
-def field_map(g, k, u, v, rho_pts, z_pts, *, n_phi=48, chunk=None,
+def field_map(g, k, u, v, rho_pts, z_pts, *, n_phi=None, chunk=None,
               incident=None, exterior=False):
     """Evaluate psi at the given points.
 
     ``incident`` (only for ``exterior=True``) must be a callable
     ``f(rho, z) -> (psi_inc, dpsi_inc/dn_on_surface)``; the surface values are
     taken from ``g``.
+
+    ``n_phi=None`` scales the azimuthal rule with the electrical size: the
+    integrand oscillates through up to k sqrt(R_max rho_max) / pi cycles in
+    phi, and 8 Gauss points per cycle resolve it.
     """
+    rho_pts = np.asarray(rho_pts, float).ravel()
+    z_pts = np.asarray(z_pts, float).ravel()
+    if n_phi is None:
+        rmax = float(rho_pts.max()) if rho_pts.size else 0.0
+        scale = np.sqrt(max(rmax, 1e-12) * g.rho.max())
+        n_phi = max(48, int(np.ceil(8.0 * abs(k) * scale / np.pi)))
     xg, wg = np.polynomial.legendre.leggauss(n_phi)
     phi = 0.5 * np.pi * (xg + 1.0)
     wphi = 0.5 * np.pi * wg * 2.0
     cphi, sphi = np.cos(phi), np.sin(phi)
 
-    rho_pts = np.asarray(rho_pts, float).ravel()
-    z_pts = np.asarray(z_pts, float).ravel()
     out = np.empty(rho_pts.size, dtype=complex)
 
     if chunk is None:

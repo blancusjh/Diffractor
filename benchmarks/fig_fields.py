@@ -366,7 +366,7 @@ def fig_ball_large():
     ax[1, 1].set_xlabel("k₂a"); ax[1, 1].set_ylabel("max rel. error in u")
     ax[1, 1].legend(fontsize=9, loc="lower right")
     ttl(ax[1, 1], "Error versus electrical size",
-        "64-100 panels per interior wavelength throughout")
+        "40 panels per interior wavelength, azimuthal rule scaled with ka")
 
     fig.suptitle(f"Exact vs Müller BOR-BEM for a dielectric ball  "
                  f"(a = {aa:.0f}λ, n₂ = {float(BL['n2'])})",

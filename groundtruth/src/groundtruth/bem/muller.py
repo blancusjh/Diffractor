@@ -49,8 +49,13 @@ Performance notes (this rewrite)
 * The near-band and self-panel corrections are assembled in batched calls
   instead of a Python double loop over ~7N element pairs.
 * Defaults calibrated against the exact ball rather than guessed:
-  - n_phi = 24.  The DIFFERENCE kernels are smooth in phi, so 64 and 16 give
-    the same answer to 4 digits; 64 was pure waste.
+  - n_phi scales with the electrical size.  The DIFFERENCE kernels are smooth
+    in phi (no singularity), but they still OSCILLATE like exp(ik d) with a
+    phase swing of up to 2 k rho_max across phi in [0, pi] — that is
+    k rho_max / pi full cycles.  A fixed rule is exact at small ka and
+    catastrophically wrong at large ka: at k2 a ~ 47 the surface error is
+    43 % with 24 points and 7.8e-4 with 96.  The default now allots 8 Gauss
+    points per oscillation cycle, with a floor of 24.
   - ng_smooth = 1 (midpoint).  Counter-intuitively this is ~3.6x MORE accurate
     than 2-point Gauss on the source panel, because midpoint quadrature paired
     with midpoint collocation has an even-order error cancellation that Gauss
@@ -183,15 +188,22 @@ def _batched(field_idx, src_idx, s_nodes, w_nodes, g, k1, k2, cphi, wphi,
             mat[ii, jj] = np.einsum("pq,pq->p", vals.reshape(b - a, Qn), w)
 
 
-def assemble_muller(g: Generator, k1, k2, n_phi=24, n_near=5, ng_near=8,
+def assemble_muller(g: Generator, k1, k2, n_phi=None, n_near=5, ng_near=8,
                     ng_smooth=1, block=48):
     """Assemble dS, dK, dK', dT.
 
     dS, dK, dK' have smooth kernels, so two Gauss points per source panel
     already give O(h^2).  dT keeps a log singularity, so its self panel uses
     the graded rule and its near band a finer Gauss rule.
+
+    ``n_phi=None`` scales the azimuthal rule with the electrical size:
+    the phi-integrand oscillates through k rho_max / pi cycles, and 8 Gauss
+    points per cycle resolve it (verified against the exact ball).
     """
     N = g.N
+    if n_phi is None:
+        kmax = max(abs(k1), abs(k2))
+        n_phi = max(24, int(np.ceil(8.0 * kmax * g.rho.max() / np.pi)))
     xg, wg = _gauss(n_phi)
     phi = 0.5 * np.pi * (xg + 1.0)
     wphi = 0.5 * np.pi * wg * 2.0
