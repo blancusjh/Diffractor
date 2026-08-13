@@ -192,8 +192,64 @@ def ball_fields(a=6.0, n1=1.0, n2=2.5, n_elem=900):
     print("    -> ball_fields.npz")
 
 
+# ══ 2b. BEM vs exact on a well-resolved ball ════════════════════════════════
+def ball_comparison(a=1.5, n1=1.0, n2=1.5, n_elem=700):
+    """Full 2D field maps from both the exact series and the BEM,
+    on a ball small enough that the BEM resolves it well."""
+    b = ScalarBall(n1, n2, a, LAM, lmax_pad=25)
+    k2a = b.k2 * a
+    print(f"  ball comparison a={a}λ: k₂a={k2a:.1f}, lmax={b.lmax}")
+
+    zg = np.linspace(-1.8 * a, 1.8 * a, 240)
+    rg = np.linspace(0.0, 1.8 * a, 120)
+    RG, ZG = np.meshgrid(rg, zg, indexing="ij")
+    inside = np.hypot(RG, ZG) < 0.97 * a
+    outside = np.hypot(RG, ZG) > 1.03 * a
+
+    t0 = time.time()
+    psi_exact = b.field_grid(RG.ravel(), ZG.ravel()).reshape(RG.shape)
+    print(f"    exact series ({RG.size} pts) in {time.time()-t0:.0f}s")
+
+    from groundtruth.bem import sphere_generator
+    g = sphere_generator(a, n_elem)
+    if (g.n_rho * g.rho + g.n_z * g.z).mean() < 0:
+        g.flip_normal()
+    ui = np.exp(1j * b.k1 * g.z)
+    vi = 1j * b.k1 * g.n_z * ui
+    t0 = time.time()
+    u, v, _ = solve_muller(g, b.k1, b.k2, ui, vi)
+    print(f"    BEM solve N={g.N} in {time.time()-t0:.0f}s")
+
+    psi_bem = np.full(RG.shape, np.nan, dtype=complex)
+    t0 = time.time()
+    psi_bem[inside] = field_map(g, b.k2, u, v, RG[inside], ZG[inside], n_phi=48)
+    print(f"    BEM interior ({inside.sum()} pts) in {time.time()-t0:.0f}s")
+
+    def inc_pair(rho_s, z_s):
+        psi = np.exp(1j * b.k1 * z_s)
+        return psi, 1j * b.k1 * g.n_z * psi
+
+    t0 = time.time()
+    psi_bem[outside] = (np.exp(1j * b.k1 * ZG[outside])
+                        + field_map(g, b.k1, u, v, RG[outside], ZG[outside],
+                                    n_phi=48, exterior=True, incident=inc_pair))
+    print(f"    BEM exterior ({outside.sum()} pts) in {time.time()-t0:.0f}s")
+
+    valid = inside | outside
+    err = np.abs(psi_bem - psi_exact)
+    peak = np.abs(psi_exact[valid]).max()
+    print(f"    max pointwise |error|/peak = {err[valid].max()/peak:.2e}")
+
+    np.savez(OUT + "ball_comparison.npz",
+             rg=rg, zg=zg, psi_exact=psi_exact, psi_bem=psi_bem,
+             inside=inside, outside=outside,
+             a=a, n1=n1, n2=n2, k2a=k2a, N=g.N, x1=b.x1)
+    print("    -> ball_comparison.npz")
+
+
 if __name__ == "__main__":
     print("computing field maps")
     ovoid_fields()
     ovoid_po()
     ball_fields()
+    ball_comparison()
