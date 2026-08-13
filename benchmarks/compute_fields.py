@@ -162,7 +162,7 @@ def ovoid_po(zi=8.0, ppl=32.0, n1=1.0, n2=1.5):
 
 
 # ══ 2. dielectric ball: exact series and Muller BEM on the same body ═════════
-def ball_fields(a=6.0, n1=1.0, n2=2.5, n_elem=900):
+def ball_fields(a=6.0, n1=1.0, n2=2.5, n_elem=2400):
     b = ScalarBall(n1, n2, a, LAM, lmax_pad=25)
     zf = a * n1 / (n2 - n1)                       # paraxial internal focus
     print(f"  ball a={a}λ: x1={b.x1:.1f}, lmax={b.lmax}, focus z={zf:.2f}λ")
@@ -188,14 +188,14 @@ def ball_fields(a=6.0, n1=1.0, n2=2.5, n_elem=900):
     print(f"    BEM solve N={g.N} in {time.time()-t0:.0f}s")
 
     z_ax = np.linspace(-0.85 * a, 0.85 * a, 200)
-    bem_ax = field_map(g, b.k2, u, v, np.zeros_like(z_ax), z_ax, n_phi=64)
+    bem_ax = field_map(g, b.k2, u, v, np.zeros_like(z_ax), z_ax)
     exact_ax = b.field_grid(np.zeros_like(z_ax), z_ax)
     print(f"    axial agreement "
           f"{np.abs(bem_ax-exact_ax).max()/np.abs(exact_ax).max():.2e}")
 
     psi_bem = np.full(RG.shape, np.nan, dtype=complex)
     t0 = time.time()
-    psi_bem[inside] = field_map(g, b.k2, u, v, RG[inside], ZG[inside], n_phi=32)
+    psi_bem[inside] = field_map(g, b.k2, u, v, RG[inside], ZG[inside])
     print(f"    BEM interior ({inside.sum()} pts) in {time.time()-t0:.0f}s")
 
     def inc_pair(rho_s, z_s):
@@ -205,7 +205,7 @@ def ball_fields(a=6.0, n1=1.0, n2=2.5, n_elem=900):
     t0 = time.time()
     psi_bem[outside] = (np.exp(1j * b.k1 * ZG[outside])
                         + field_map(g, b.k1, u, v, RG[outside], ZG[outside],
-                                    n_phi=32, exterior=True, incident=inc_pair))
+                                    exterior=True, incident=inc_pair))
     print(f"    BEM exterior ({outside.sum()} pts) in {time.time()-t0:.0f}s")
 
     valid = inside | outside
@@ -250,7 +250,7 @@ def ball_comparison(a=1.5, n1=1.0, n2=1.5, n_elem=700):
 
     psi_bem = np.full(RG.shape, np.nan, dtype=complex)
     t0 = time.time()
-    psi_bem[inside] = field_map(g, b.k2, u, v, RG[inside], ZG[inside], n_phi=48)
+    psi_bem[inside] = field_map(g, b.k2, u, v, RG[inside], ZG[inside])
     print(f"    BEM interior ({inside.sum()} pts) in {time.time()-t0:.0f}s")
 
     def inc_pair(rho_s, z_s):
@@ -260,7 +260,7 @@ def ball_comparison(a=1.5, n1=1.0, n2=1.5, n_elem=700):
     t0 = time.time()
     psi_bem[outside] = (np.exp(1j * b.k1 * ZG[outside])
                         + field_map(g, b.k1, u, v, RG[outside], ZG[outside],
-                                    n_phi=48, exterior=True, incident=inc_pair))
+                                    exterior=True, incident=inc_pair))
     print(f"    BEM exterior ({outside.sum()} pts) in {time.time()-t0:.0f}s")
 
     valid = inside | outside
