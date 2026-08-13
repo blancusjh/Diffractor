@@ -162,7 +162,7 @@ def ovoid_po(zi=8.0, ppl=32.0, n1=1.0, n2=1.5):
 
 
 # ══ 2. dielectric ball: exact series and Muller BEM on the same body ═════════
-def ball_fields(a=6.0, n1=1.0, n2=2.5, n_elem=2400):
+def ball_fields(a=6.0, n1=1.0, n2=2.5, n_elem=1500):
     b = ScalarBall(n1, n2, a, LAM, lmax_pad=25)
     zf = a * n1 / (n2 - n1)                       # paraxial internal focus
     print(f"  ball a={a}λ: x1={b.x1:.1f}, lmax={b.lmax}, focus z={zf:.2f}λ")
