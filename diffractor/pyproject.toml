@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diffractor"
+version = "2.0.0a0"
+description = "Scalar wave optics with physically correct interface scattering"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
