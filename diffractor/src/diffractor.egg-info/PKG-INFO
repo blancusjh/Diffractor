@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: diffractor
+Version: 2.0.0a0
+Summary: Scalar wave optics with physically correct interface scattering
+Requires-Python: >=3.10
+Requires-Dist: numpy>=1.24
+Requires-Dist: scipy>=1.10

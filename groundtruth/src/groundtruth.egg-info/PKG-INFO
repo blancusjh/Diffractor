@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: groundtruth
+Version: 0.1.0
+Summary: Reference solvers and exact solutions for scalar wave optics
+Requires-Python: >=3.10
+Requires-Dist: numpy>=1.24
+Requires-Dist: scipy>=1.10
