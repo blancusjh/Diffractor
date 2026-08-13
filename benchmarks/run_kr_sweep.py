@@ -9,6 +9,7 @@ any systematic trend is finite-wavelength physics, not geometry.
 """
 
 import time
+from pathlib import Path
 
 import numpy as np
 
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     print(f"\n  |edge_meas − edge_ray| ~ (kR)^{p[0]:.2f}   "
           f"(geometrical optics predicts −1)")
 
-    np.savez("/home/claude/monorepo/benchmarks/golden/kr_sweep.npz",
+    np.savez(str(Path(__file__).resolve().parent / "golden" / "kr_sweep.npz"),
              **{f"{k}{int(r['zi'])}": r[k] for r in res
                 for k in ("th", "am", "ar", "ph", "thm", "kR", "R2", "N")},
              zis=np.array([r["zi"] for r in res]),

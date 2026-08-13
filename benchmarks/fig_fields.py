@@ -1,18 +1,21 @@
 """Scalar-field figures: meridional sections, focal region, the two reference
 spheres, and the solver check against the exact ball."""
 
+from pathlib import Path
+
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-G = "/home/claude/monorepo/benchmarks/golden/"
+_HERE = Path(__file__).resolve().parent
+G = str(_HERE / "golden") + "/"
 OV = np.load(G + "ovoid_fields.npz")
 AB = np.load(G + "ovoid_fields_abs.npz")
 BL = np.load(G + "ball_fields.npz")
 MC = np.load(G + "method_check.npz")
 PO = np.load(G + "ovoid_po.npz")
-OUT = "/home/claude/monorepo/benchmarks/"
+OUT = str(_HERE) + "/"
 
 BLUE, ORANGE, GREEN, RED = "#2a78d6", "#eb6834", "#008300", "#e34948"
 YELLOW, VIOLET, AQUA = "#eda100", "#4a3aa7", "#1baf7a"

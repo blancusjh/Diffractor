@@ -154,14 +154,11 @@ class Ovoid:
         cos_i2 = G / (d2 * Q)
         sin_i2 = sin1 * np.abs(H) / (d2 * Q)
 
-        # -- Fresnel intensity transmittance ----------------------------------
+        # -- Fresnel intensity transmittance (scalar = s-polarisation only) -----
         A1, A2 = n1 * cos_i1, n2 * cos_i2
         with np.errstate(divide="ignore", invalid="ignore"):
             ts = 2 * A1 / (A1 + A2)
-            tp = 2 * A1 / (n2 * cos_i1 + n1 * cos_i2)
             Ts = np.where(A1 > 0, (A2 / A1) * ts**2, 0.0)
-            Tp = np.where(A1 > 0, (A2 / A1) * tp**2, 0.0)
-        T = 0.5 * (Ts + Tp)
 
         return dict(
             d1=d1, d2=d2, r=r, z=z,
@@ -170,7 +167,7 @@ class Ovoid:
             Dr=Dr, Dz=Dz, S=S, G=G, H=H, Q=Q, w1=w1, w2=w2,
             dth1=dth1, dth2=dth2, zsp=zsp,
             cos_i1=cos_i1, cos_i2=cos_i2, sin_i1=sin_i1, sin_i2=sin_i2,
-            Ts=Ts, Tp=Tp, T=T, nrm=nrm,
+            Ts=Ts, nrm=nrm,
             # invariants for verification
             OPL=n1 * d1 + n2 * d2,
             snell=n1 * sin_i1 - n2 * sin_i2,
@@ -189,7 +186,7 @@ class Ovoid:
         with np.errstate(divide="ignore", invalid="ignore"):
             P = np.sqrt((self.n1 / self.n2) * w1 / w2)
         if fresnel:
-            P = P * np.sqrt(g["T"])
+            P = P * np.sqrt(g["Ts"])
         return P, w1, w2
 
 
@@ -216,7 +213,7 @@ if __name__ == "__main__":
     print(f"  NA         = {N2*np.sin(g['th2'][-1]):.4f}")
     print(f"  slope dz/dr at rim = {g['zsp'][-1]:.4f}   (cot th1 = {1/np.tan(g['th1'][-1]):.4f})")
     print(f"  angle of incidence at rim = {np.degrees(np.arccos(g['cos_i1'][-1])):.3f} deg")
-    print(f"  Fresnel T at rim          = {g['T'][-1]:.6f}")
+    print(f"  Fresnel Ts at rim         = {g['Ts'][-1]:.6f}")
 
     print("\n-- exactness checks (full oval) --")
     print(f"  max |OPL - C| / C            = {np.abs(g['OPL']-ov.C).max()/ov.C:.3e}")
@@ -229,12 +226,12 @@ if __name__ == "__main__":
           f"{np.abs((g['zsp'][m]-num[m])/g['zsp'][m]).max():.3e}")
 
     print("\n-- transmission roll-off toward the rim --")
-    print(f"  {'i1 [deg]':>9} {'th2 [deg]':>10} {'NA':>7} {'T':>9} {'r [mm]':>9}")
+    print(f"  {'i1 [deg]':>9} {'th2 [deg]':>10} {'NA':>7} {'Ts':>9} {'r [mm]':>9}")
     for frac in (0.0, 0.5, 0.8, 0.9, 0.95, 0.99, 1.0):
         k = min(int(frac * (len(g["r"]) - 1)), len(g["r"]) - 1)
         print(f"  {np.degrees(np.arccos(g['cos_i1'][k])):9.2f} "
               f"{np.degrees(g['th2'][k]):10.2f} {N2*g['sin2'][k]:7.4f} "
-              f"{g['T'][k]:9.5f} {g['r'][k]*1e3:9.4f}")
+              f"{g['Ts'][k]:9.5f} {g['r'][k]*1e3:9.4f}")
 
     for cut in (85.0, 80.0, 75.0, 70.0, 65.0):
         gc = ov.sample(20001, i1_max_deg=cut, cluster=2.0)

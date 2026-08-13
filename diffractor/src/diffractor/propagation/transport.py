@@ -37,7 +37,14 @@ def ray_tube_amplitude(n1, n2, w1, w2, T, *, regularize_axis=True):
     with np.errstate(divide="ignore", invalid="ignore"):
         P = np.sqrt(T * (n1 / n2) * w1 / w2)
     if regularize_axis and P.size > 3:
-        P[0] = 3 * P[1] - 3 * P[2] + P[3]      # removable 0/0 on the axis
+        # The 0/0 on the axis is removable.  Fit a low-order polynomial to the
+        # first few off-axis points and evaluate at index 0.  This handles
+        # non-uniform spacing (e.g. clustered sampling) correctly, unlike the
+        # previous hard-coded equal-spacing extrapolation.
+        n_fit = min(6, P.size - 1)
+        idx = np.arange(1, n_fit + 1)
+        coeffs = np.polyfit(idx, P[1:n_fit + 1].real, min(2, n_fit - 1))
+        P[0] = np.polyval(coeffs, 0)
     return P
 
 

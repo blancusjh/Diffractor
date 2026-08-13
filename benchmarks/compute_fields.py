@@ -9,6 +9,7 @@ runs bracket how much of the map is direct and how much is trapped.
 """
 
 import time
+from pathlib import Path
 
 import numpy as np
 from scipy.special import j0
@@ -18,7 +19,7 @@ from groundtruth.bem import (field_map, ovoid_body, point_source_cauchy,
 from groundtruth.exact import ScalarBall
 
 LAM = 1.0
-OUT = "/home/claude/monorepo/benchmarks/golden/"
+OUT = str(Path(__file__).resolve().parent / "golden") + "/"
 
 
 # ══ 1. stigmatic ovoid, solved by Muller BOR-BEM ══════════════════════════════
