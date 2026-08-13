@@ -9,6 +9,7 @@ src/groundtruth/bem/__init__.py
 src/groundtruth/bem/_ovoid_geometry.py
 src/groundtruth/bem/bodies.py
 src/groundtruth/bem/direct.py
+src/groundtruth/bem/fields.py
 src/groundtruth/bem/muller.py
 src/groundtruth/exact/__init__.py
 src/groundtruth/exact/scalar_ball.py
