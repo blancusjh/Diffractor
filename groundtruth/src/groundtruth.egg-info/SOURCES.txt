@@ -1,0 +1,16 @@
+pyproject.toml
+src/groundtruth/__init__.py
+src/groundtruth.egg-info/PKG-INFO
+src/groundtruth.egg-info/SOURCES.txt
+src/groundtruth.egg-info/dependency_links.txt
+src/groundtruth.egg-info/requires.txt
+src/groundtruth.egg-info/top_level.txt
+src/groundtruth/bem/__init__.py
+src/groundtruth/bem/_ovoid_geometry.py
+src/groundtruth/bem/bodies.py
+src/groundtruth/bem/direct.py
+src/groundtruth/bem/muller.py
+src/groundtruth/exact/__init__.py
+src/groundtruth/exact/scalar_ball.py
+src/groundtruth/protocol/__init__.py
+src/groundtruth/protocol/pupil.py

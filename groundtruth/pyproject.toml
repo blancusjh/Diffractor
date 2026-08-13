@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "groundtruth"
+version = "0.1.0"
+description = "Reference solvers and exact solutions for scalar wave optics"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
