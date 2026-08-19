@@ -57,7 +57,8 @@ def _encode(rgb, saturation=1.0, gamma=True):
 
 
 def spectrum_to_srgb(nm, spectral_intensity, *, illuminant=None,
-                     saturation=1.0, brightness=1.0, stretch=1.0, gamma=True):
+                     saturation=1.0, brightness=1.0, stretch=1.0, floor=0.0,
+                     gamma=True):
     """Composite per-wavelength intensities to sRGB.
 
     `spectral_intensity` has shape (..., n_lambda).  The result is normalised so
@@ -65,7 +66,10 @@ def spectrum_to_srgb(nm, spectral_intensity, *, illuminant=None,
     "how this pattern differs, spectrally, from the light that made it".
 
     `stretch` < 1 applies I**stretch before compositing, which lifts the dim
-    outer structure into view without touching hue.
+    outer structure into view without touching hue; `floor` then subtracts the
+    stretched value of that intensity, so the background goes back to black
+    instead of grey.  Both are display curves, applied identically at every
+    wavelength — they change how much you can see, not what colour it is.
     """
     nm = np.asarray(nm, float)
     S = np.asarray(spectral_intensity, float)
@@ -74,6 +78,9 @@ def spectrum_to_srgb(nm, spectral_intensity, *, illuminant=None,
 
     if stretch != 1.0:
         S = np.power(np.maximum(S, 0.0), stretch)
+    if floor > 0.0:
+        f = floor ** stretch
+        S = np.clip((S - f) / (1.0 - f), 0.0, None)
 
     def integrate(vals):
         XYZ = np.stack([np.trapezoid(vals * b * w, nm, axis=-1)
