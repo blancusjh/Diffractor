@@ -240,6 +240,25 @@ chromatic aberration of the opposite sign, and a hundred times worse, than a
 glass singlet. The measured foci follow `f₀λ₀/λ` to 5 µm across 430–680 nm.
 → [`03_polychromatic.py`](examples/03_polychromatic.py)
 
+### A hexagon in white light — the six-pointed star
+
+![A hexagonal aperture in white light: the near-field hexagon with fringes, the pattern dissolving into rays, and the far-field six-pointed star in monochromatic and true colour, with one spike resolved wavelength by wavelength.](docs/images/hexagon_polychromatic.png)
+
+The one figure the core cannot produce by itself — a hexagon is not
+axisymmetric — so it uses the 2-D Fresnel integral in
+[`examples/cartesian.py`](examples/cartesian.py), which reproduces the core's
+exact Rayleigh–Sommerfeld result for a circular aperture to 10⁻⁵ of the peak.
+Near the aperture the pattern is still a hexagon with fringes and almost no
+colour: at a Fresnel number of 6 every wavelength does much the same thing.
+Far from it the six edges throw six spikes **perpendicular to themselves** —
+the measured directions land within 0.2° of the edge normals, and the far field
+falls as r⁻² along a normal against r⁻³·⁶ towards a corner, which is *why*
+there is a star: a straight edge radiates along its own normal, and away from
+the normals only the corners are left. Each spike is a channelled spectrum, its
+fringes sitting at radii ∝ λ. This is what a camera iris does to a bright
+light.
+→ [`05_hexagon_polychromatic.py`](examples/05_hexagon_polychromatic.py)
+
 ### Stigmatic against spherical
 
 The figure at the top of this page, in numbers: at an 85 λ aperture radius
@@ -256,6 +275,11 @@ not quoted.
 | [`02_gratings_zoneplate.py`](examples/02_gratings_zoneplate.py) | ~20 s | ring gratings, the grating equation, and the zone plate's focal series |
 | [`03_polychromatic.py`](examples/03_polychromatic.py) | ~90 s | 31 monochromatic solves composited to sRGB; chromatic focal spread |
 | [`04_stigmatic_vs_spherical.py`](examples/04_stigmatic_vs_spherical.py) | ~10 s | exact ray trace, ray-tube pupils, Debye focal fields, Strehl sweep |
+| [`05_hexagon_polychromatic.py`](examples/05_hexagon_polychromatic.py) | ~15 s | a hexagon from near field to six-pointed star, in white light |
+
+Three support modules sit beside them: `style.py` (the shared plot style),
+`colorimetry.py` (CIE 1931 → sRGB) and `cartesian.py` (the 2-D Fresnel integral,
+with `python examples/cartesian.py` running its own check against the core).
 
 ```bash
 python examples/01_apertures.py     # from anywhere; figures land in docs/images/
@@ -332,8 +356,16 @@ the reference sphere, energy budget). It is never imported by `diffractor`.
   micrometres. `lam` is always the *vacuum* wavelength and `n` the index of
   the medium, so the medium wavelength is `lam/n` wherever it matters.
 - **Everything is axisymmetric.** Every propagator is a Hankel/BOR operator on
-  a radial grid `r`. There are no 2-D Cartesian grids yet, which is why the
-  gallery uses ring gratings and zone plates rather than line gratings.
+  a radial grid `r`. There are no 2-D Cartesian grids in the core yet — which
+  is why the gallery uses ring gratings and zone plates rather than line ones.
+  The one 2-D figure, the hexagon, is computed by
+  [`examples/cartesian.py`](examples/cartesian.py): a separable-matrix-DFT
+  Fresnel integral that deliberately lives in `examples/` rather than the core,
+  because the core's contract is that nothing enters it without a rung on the
+  validation ladder. What it has instead is `check_against_core()`, which puts
+  it beside the exact axisymmetric propagator on a circular aperture (10⁻⁵ of
+  the peak). Promoting it is the natural first half of the Cartesian FFT
+  version `scattering/planar.py` already promises.
 - **The aperture is the domain.** Radial grids run `0 → a`, so a hard edge is
   exact and costs no sampling error; there is no mask array to alias.
 - **`propagation.fresnel_plane` is the raw kernel.** The *gated* one — the one
