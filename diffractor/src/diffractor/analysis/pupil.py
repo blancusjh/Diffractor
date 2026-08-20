@@ -32,7 +32,7 @@ def predicted_pupil(interface, g, amplitude=1.0 / (4 * np.pi)):
 
     Composes the transport factor (propagation) for the given interface —
     the Interface object itself carries no optics."""
-    from ..propagation.transport import stigmatic_pupil
+    from ..transport import stigmatic_pupil
     return amplitude * stigmatic_pupil(interface, g)
 
 
