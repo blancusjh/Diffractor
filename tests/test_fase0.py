@@ -11,13 +11,13 @@ from diffractor import Medium, stigmatic_interface
 from diffractor.analysis.opl import opd_waves
 from diffractor.analysis.pupil import demodulate, energy_through_sphere, predicted_pupil
 from diffractor.geometry import DescartesOvoid
-from diffractor.propagation.exact import asm_axisym, rs1_plane
-from diffractor.propagation.paraxial import fresnel_plane
-from diffractor.propagation.transport import (ray_tube_amplitude,
+from diffractor import Grid, MonochromaticField
+from diffractor.propagation import angular_spectrum, fresnel, rayleigh_sommerfeld
+from diffractor.transport import (ray_tube_amplitude,
                                               stigmatic_pupil,
                                               stigmatic_pupil_from_tubes)
 from diffractor.scattering.fresnel import R_s, T_s, t_s
-from diffractor.scattering.planar import t_spectral, transmit_axisym
+from diffractor.scattering.planar import t_spectral, transmit
 from diffractor.sources import point_source, point_source_normal_derivative
 
 from groundtruth.exact import ScalarBall
@@ -101,38 +101,50 @@ class TestStigmaticPupil:
 
 # ── propagators ───────────────────────────────────────────────────────────────
 def test_asm_equals_rs1():
-    """Two representations of the same exact operator."""
+    """Two representations of the same exact operator: the angular spectrum
+    (Fourier space) and Rayleigh–Sommerfeld I (real space)."""
     n = 1.5
     k = 2 * np.pi * n / LAM
     r = np.linspace(0, 1e-3, 8001)          # >5 samples per radial fringe
     z = 5e-3
     Rc = np.hypot(r, z)
-    U = np.exp(-1j * k * Rc) / Rc           # converging spherical wave
-    rho = np.linspace(0, 20e-6, 60)
-    Ia = np.abs(asm_axisym(U, r, z, n, LAM, rho)[0]) ** 2
-    Ir = np.abs(rs1_plane(U, r, z, n, LAM, rho)) ** 2
+    field = MonochromaticField(Grid.polar(r), (np.exp(-1j * k * Rc) / Rc)[:, None],
+                               LAM, medium=Medium(n))
+    out = Grid.polar(np.linspace(0, 20e-6, 60))
+    Ia = np.abs(angular_spectrum(field, z, output_grid=out).u[:, 0]) ** 2
+    Ir = np.abs(rayleigh_sommerfeld(field, z, output_grid=out).u[:, 0]) ** 2
     assert np.abs(Ia / Ia.max() - Ir / Ir.max()).max() < 5e-3
 
 
 def test_paraxial_refuses_outside_its_regime():
     r = np.linspace(0, 9e-3, 100)
+    field = MonochromaticField(Grid.polar(r), np.ones((100, 1)), LAM,
+                               medium=Medium(1.5))
     with pytest.raises(ValueError, match="validity"):
-        fresnel_plane(np.ones_like(r, dtype=complex), r, 16e-3, 1.5, LAM,
-                      np.array([0.0]))
+        fresnel(field, 16e-3)
 
 
-# ── transmit_axisym (the full Hankel pipeline) ───────────────────────────────
-def test_transmit_axisym_reduces_to_t_spectral():
-    """A single plane-wave component through a flat interface should agree
-    with t_spectral at the same k_perp."""
+# ── transmit (the exact planar operator, on fields) ──────────────────────────
+def test_transmit_reduces_to_t_spectral():
+    """A field through a flat interface, measured in the spectral domain,
+    must reproduce the diagonal operator t(k⊥) — the multiplicative identity
+    F_out(k) = t(k)·F_in(k) on the field's own spectral content."""
+    from diffractor import FT2
+
     k0 = 2 * np.pi / LAM
     n1, n2 = 1.0, 1.5
     r = np.linspace(0, 1.2e-3, 6001)
-    U = np.ones_like(r, dtype=complex)
-    U_out, rho, t_vals = transmit_axisym(U, r, n1, n2, LAM)
-    t_ref = t_spectral(2 * np.pi * rho, n1, n2, k0)
-    prop = rho <= n1 / LAM
-    assert np.abs(t_vals[prop] - t_ref[prop]).max() < 1e-10
+    grid = Grid.polar(r)
+    field = MonochromaticField(grid, np.exp(-(r[:, None] / 3e-4) ** 2), LAM)
+    kg = grid.reciprocal(k_max=3.0e4, n_k=800)   # the Gaussian's own band
+    out = transmit(field, Medium(n2), kgrid=kg)
+
+    F_in = FT2(field, kgrid=kg)
+    F_out = FT2(out.like(out.values, medium=Medium(n1)), kgrid=kg)
+    t_ref = t_spectral(kg.axes[0], n1, n2, k0)
+    err = np.abs(F_out.u[:, 0] - t_ref * F_in.u[:, 0]).max()
+    assert err < 1e-4 * np.abs(F_in.u).max()
+    assert out.medium.n == n2
 
 
 # ── analysis: demodulate and energy ──────────────────────────────────────────
