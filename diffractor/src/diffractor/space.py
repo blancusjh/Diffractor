@@ -34,15 +34,24 @@ import numpy as np
 
 from .basis import Basis, CARTESIAN, POLAR, resolve_basis
 
-__all__ = ["Grid", "BESSEL_SAMPLES_PER_PERIOD"]
+__all__ = ["Grid", "BESSEL_SAMPLES_PER_PERIOD", "POLAR_BAND_FRACTION"]
 
-#: Samples per oscillation period of J_m(k·r_max) that the radial quadrature
-#: keeps: the transform integrand oscillates in k with local period 2π/r_max,
-#: and trapezoid quadrature needs ≥ ~2.5 samples per period before its error
-#: drops below the truncation error at k_max.  This inherits — now named and
-#: justified — the ``n_rho = 2.5 · rho_max · r_max`` heuristic the old
-#: axisymmetric propagator used.
-BESSEL_SAMPLES_PER_PERIOD: float = 2.5
+#: Samples per oscillation period of J_m(k·r_max) that the default polar
+#: reciprocal keeps on its k axis: the inverse-transform integrand oscillates
+#: in k with local period 2π/r_max, so Δk = 2π/(β·r_max).  Measured on a
+#: Gaussian round trip with the Gregory-corrected quadrature, the error falls
+#: as β⁻⁴ and reaches a few 1e-4 at β = 5 — the older 2.5 (the legacy
+#: ``n_rho = 2.5·rho_max·r_max`` heuristic) leaves it at a few 1e-3.
+BESSEL_SAMPLES_PER_PERIOD: float = 5.0
+
+#: Fraction of the radial Nyquist limit π/Δr that the default polar reciprocal
+#: spans.  Beyond k = π/(2Δr) the kernel J_m(k r) has fewer than 4 radial
+#: samples per period near r_max, its quadrature values stop being
+#: trustworthy, and — worse — the inverse transform *collects* that noise
+#: under its k dk measure (measured: extending a Gaussian's default band from
+#: π/2Δr to π/Δr grows the round-trip error 20×).  Content beyond the default
+#: band is a statement that Δr is too coarse, not that k_max is too small.
+POLAR_BAND_FRACTION: float = 0.5
 
 _Axes = Tuple[np.ndarray, np.ndarray]
 
@@ -195,10 +204,13 @@ class Grid:
         Cartesian: the FFT's own centred k-grid, ``k = 2π·fftshift(fftfreq)``
         per axis (``k_max``/``n_k`` are polar-only knobs and are rejected
         here).  Polar: ``k = linspace(0, k_max, n_k)`` with the same θ axis;
-        defaults ``k_max = π/Δr_min`` (the radial Nyquist limit — content
-        beyond it is not representable on the r axis anyway) and
-        ``n_k = ⌈BESSEL_SAMPLES_PER_PERIOD · k_max · r_max / 2π⌉ + 1`` (the
-        oscillation-sampling rule; see the module constant).
+        defaults ``k_max = POLAR_BAND_FRACTION · π/Δr_min`` (the band over
+        which the radial sampling still resolves the kernel — see the module
+        constant) and ``n_k = ⌈BESSEL_SAMPLES_PER_PERIOD · k_max · r_max /
+        2π⌉ + 1`` (the k-axis oscillation-sampling rule).  Both are honest
+        knobs, not magic: band-limit ``k_max`` to your field's content (a
+        propagator limits it to the propagating cone) and the quadrature
+        rewards you.
         """
         if self.basis is CARTESIAN:
             if k_max is not None or n_k is not None:
@@ -217,7 +229,7 @@ class Grid:
             if r.size < 2:
                 raise ValueError("polar reciprocal needs at least 2 radial samples")
             if k_max is None:
-                k_max = np.pi / float(np.min(np.diff(r)))
+                k_max = POLAR_BAND_FRACTION * np.pi / float(np.min(np.diff(r)))
             if n_k is None:
                 n_k = int(np.ceil(BESSEL_SAMPLES_PER_PERIOD * k_max * r[-1]
                                   / (2.0 * np.pi))) + 1

@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 
 from diffractor.basis import Basis, CARTESIAN, POLAR, resolve_basis
-from diffractor.space import BESSEL_SAMPLES_PER_PERIOD, Grid
+from diffractor.space import (BESSEL_SAMPLES_PER_PERIOD,
+                              POLAR_BAND_FRACTION, Grid)
 from diffractor.spectrum import Spectrum
 from diffractor.units import cm, m, mm, nm, um
 
@@ -36,7 +37,7 @@ def test_polar_reciprocal_default_formulas():
     g = Grid.polar(r, n_theta=8)
     k = g.reciprocal()
     dr = np.min(np.diff(r))
-    k_max = np.pi / dr
+    k_max = POLAR_BAND_FRACTION * np.pi / dr
     assert np.isclose(k.axes[0][-1], k_max)
     n_k = int(np.ceil(BESSEL_SAMPLES_PER_PERIOD * k_max * r[-1] / (2 * np.pi))) + 1
     assert k.axes[0].size == n_k
