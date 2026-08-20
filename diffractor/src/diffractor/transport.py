@@ -19,9 +19,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..scattering.fresnel import T_s, t_s
+from .scattering.fresnel import T_s, t_s
 
-__all__ = ["ray_tube_amplitude", "stigmatic_pupil"]
+__all__ = ["ray_tube_amplitude", "stigmatic_pupil", "stigmatic_pupil_from_tubes"]
 
 
 def ray_tube_amplitude(n1, n2, w1, w2, T, *, regularize_axis=True):
