@@ -50,7 +50,7 @@ from .spectrum import Spectrum
 
 __all__ = ["angular_spectrum", "fresnel", "fraunhofer", "rayleigh_sommerfeld",
            "fresnel_validity_distance", "spectral_budget",
-           "PARAXIAL_MARGIN", "SPECTRAL_MARGIN"]
+           "PARAXIAL_MARGIN", "SPECTRAL_MARGIN", "ASM_SAMPLES_PER_PERIOD"]
 
 #: Safety margin on Goodman's paraxial condition z³ ≫ (π/4λ)·r_max⁴.  At
 #: margin 1 the Fresnel integral is already visibly wrong at high aperture
@@ -62,6 +62,15 @@ PARAXIAL_MARGIN: float = 3.0
 #: extends: enough to represent the evanescent shoulder the transfer function
 #: needs, no more (the legacy 1.02·n/λ idiom, named).
 SPECTRAL_MARGIN: float = 1.02
+
+#: Samples per oscillation period that the polar ASM's default k-axis keeps —
+#: denser than the plain transform's rule, because the transfer phase k_z·z
+#: turns arbitrarily fast at the band edge and no linear rate estimate covers
+#: it.  Measured on a hard disc at Fresnel number ~4: the on-axis error
+#: against the closed form is 1.4e-2 at 5 samples/period, 2e-3 at 10, and
+#: saturates (band-edge fringe misregistration, ~7e-3 of the peak off axis)
+#: beyond — 10 is where accuracy stops paying for density.
+ASM_SAMPLES_PER_PERIOD: float = 10.0
 
 _POLICIES = ("raise", "warn", "force")
 
@@ -109,19 +118,19 @@ def _default_asm_kgrid(field: Field, z: float) -> Optional[Grid]:
     density: the inverse integrand carries the phase k·r + k_z·z, which
     oscillates in k at a rate up to ≈ r_max + |z|, so Δk must shrink as the
     field travels — ``n_k = ⌈β·k_max·(r_max + |z|)/2π⌉ + 1`` with β the grid
-    module's sampling rule.  (The legacy propagator's default ignored the z
-    term; that is why every long propagation needed a hand-picked n_rho.)
+    :data:`ASM_SAMPLES_PER_PERIOD`.  (The legacy propagator's default ignored
+    the z term; that is why every long propagation needed a hand-picked
+    n_rho.)
     Cartesian grids keep their FFT reciprocal — the FFT is exactly invertible,
     so its density needs no z scaling; what aliases there is the transfer
     function's *phase*, which the Matsushima limit masks.
     """
     if field.grid.basis is not POLAR:
         return None
-    from .space import BESSEL_SAMPLES_PER_PERIOD
     k_cut = 2.0 * np.pi * field.medium.n / field.spectrum.wavelengths.min()
     k_max = SPECTRAL_MARGIN * k_cut
     r_max = float(field.grid.axes[0][-1])
-    n_k = int(np.ceil(BESSEL_SAMPLES_PER_PERIOD * k_max * (r_max + abs(z))
+    n_k = int(np.ceil(ASM_SAMPLES_PER_PERIOD * k_max * (r_max + abs(z))
                       / (2.0 * np.pi))) + 1
     return field.grid.reciprocal(k_max=k_max, n_k=n_k)
 
