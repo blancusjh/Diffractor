@@ -233,7 +233,10 @@ def _cartesian_ifft(field: Field, space_grid: Grid) -> np.ndarray:
 
 
 def _separable_dft(field: Field, kgrid: Grid, inverse: bool) -> np.ndarray:
-    """Separable matrix DFT between two cartesian grids (any axes)."""
+    """Separable matrix DFT between two cartesian grids (any axes).
+
+    Two GEMMs with the spectral axis folded in — the same arithmetic as the
+    obvious einsum, but routed through BLAS."""
     src = field.grid
     sign = +1j if inverse else -1j
     wx = _axis_weights(src.axes[0])
@@ -241,11 +244,14 @@ def _separable_dft(field: Field, kgrid: Grid, inverse: bool) -> np.ndarray:
     Ex = np.exp(sign * np.outer(kgrid.axes[0], src.axes[0])) * wx  # (Mx, Nx)
     Ey = np.exp(sign * np.outer(kgrid.axes[1], src.axes[1])) * wy  # (My, Ny)
     vals = field.values                                            # (Nx, Ny, L)
-    out = np.einsum("ai,ijl->ajl", Ex, vals)
-    out = np.einsum("bj,ajl->abl", Ey, out)
+    nx, ny, nl = vals.shape
+    mx, my = Ex.shape[0], Ey.shape[0]
+    out = (Ex @ vals.reshape(nx, ny * nl)).reshape(mx, ny, nl)     # (Mx, Ny, L)
+    out = (Ey @ out.transpose(1, 0, 2).reshape(ny, mx * nl))       # (My, Mx*L)
+    out = out.reshape(my, mx, nl).transpose(1, 0, 2)               # (Mx, My, L)
     if inverse:
         out /= (2.0 * np.pi) ** 2
-    return out
+    return np.ascontiguousarray(out)
 
 
 def _generic_dft(field: Field, kgrid: Grid, inverse: bool,

@@ -1,46 +1,44 @@
 """Diffraction by circular and annular apertures — exact, and checked.
 
 A unit-amplitude plane wave illuminates a hard aperture in an opaque screen.
-The field behind it is computed with `propagation.exact`:
+The field is a `MonochromaticField` on an axisymmetric polar `Grid` (n_θ = 1),
+and everything below is the exact angular spectrum
 
-    asm_axisym / hankel  — the exact angular spectrum, kz = 2π sqrt((n/λ)² − ρ²)
-    rs1_plane            — the same operator written as a Rayleigh–Sommerfeld
-                           surface integral, used here as an independent check
+    U(z) = IFT2[ e^{i k_z z} · FT2 U ],   k_z = √(k² − k⊥²),
 
-Both are exact solutions of the Helmholtz equation in the half-space; nothing
-here is paraxial.  Two things are verified against closed form:
+evaluated — because the grid is polar — through the order-zero Hankel
+transform.  The meridional maps use the operator layer directly (`FT2` once,
+one transfer factor per plane, `IFT2` back) with a shared `PolarPlan`, so the
+Bessel kernels are computed once for 260 planes.  Two closed forms check the
+result, and `rayleigh_sommerfeld` — the same exact operator written as a
+real-space integral — cross-checks it independently:
 
-  * the on-axis field of a uniformly lit disc,
-        U(0, z) = e^{ikz} − (z/√(a²+z²)) e^{ik√(a²+z²)},
-    which is what Rayleigh–Sommerfeld I integrates to exactly, and
-  * the far field, the Airy pattern [2 J₁(x)/x]², x = k a sinθ.
+  * on the axis,  U(0, z) = e^{ikz} − (z/√(a²+z²)) e^{ik√(a²+z²)},
+  * in the far field, the Airy pattern [2 J₁(x)/x]², x = k a sinθ.
+
+Everything is in units of the wavelength (λ = 1).
 
 Run:  python examples/01_apertures.py
 """
 import numpy as np
 from scipy.special import j1
 
-from diffractor.propagation import hankel, rs1_plane
-from style import BLUE, EDGE, GREEN, INK2, MUTED, ORANGE, RED, save, ttl
+from diffractor import (FT2, IFT2, Grid, MonochromaticField, PolarPlan,
+                        fraunhofer, rayleigh_sommerfeld)
+from style import BLUE, EDGE, GREEN, INK2, MUTED, RED, save, ttl
 
 import matplotlib.pyplot as plt
 
-LAM, N_MED = 1.0, 1.0            # everything in units of the wavelength
-K = 2 * np.pi * N_MED / LAM
-A_OUT, A_IN = 15.0, 11.0         # disc radius; inner radius of the annulus
+LAM = 1.0                       # everything in units of the wavelength
+K = 2 * np.pi / LAM
+A_OUT, A_IN = 15.0, 11.0        # disc radius; inner radius of the annulus
 
-
-# ── the propagator, written once ─────────────────────────────────────────────
-def spectrum(U, r, n_rho=12000):
-    """Forward Hankel transform onto a propagating-cone ρ grid."""
-    rho = np.linspace(0.0, N_MED / LAM, n_rho)
-    return rho, hankel(U, r, rho)
-
-
-def replay(rho, Uh, z, r_out):
-    """Inverse transform of the propagated spectrum — one plane at z."""
-    kz = 2 * np.pi * np.sqrt(np.maximum((N_MED / LAM) ** 2 - rho**2, 0.0))
-    return hankel(Uh * np.exp(1j * kz * z), rho, r_out)
+# The aperture is the integration domain itself: r runs 0 → a, so the disc has
+# a mathematically sharp edge and no sampling error at all.
+disc = MonochromaticField(Grid.polar(np.linspace(0.0, A_OUT, 4001)),
+                          np.ones((4001, 1)), LAM)
+annulus = MonochromaticField(Grid.polar(np.linspace(A_IN, A_OUT, 2001)),
+                             np.ones((2001, 1)), LAM)
 
 
 def axial_exact(z, a=A_OUT):
@@ -51,65 +49,84 @@ def axial_exact(z, a=A_OUT):
 
 def airy(theta, a=A_OUT):
     x = K * a * np.sin(theta)
-    return np.where(x == 0, 1.0, (2 * j1(x) / np.where(x == 0, 1, x)) ** 2)
+    return np.where(x == 0, 1.0, (2 * j1(np.where(x == 0, 1, x)) /
+                                  np.where(x == 0, 1, x)) ** 2)
 
 
-# ── fields ───────────────────────────────────────────────────────────────────
-# The aperture is the integration domain itself: r runs 0 → a, so the disc has
-# a mathematically sharp edge and no sampling error at all.
-r_disc = np.linspace(0.0, A_OUT, 4001)
-U_disc = np.ones_like(r_disc, dtype=complex)
-
-r_ann = np.linspace(A_IN, A_OUT, 2001)
-U_ann = np.ones_like(r_ann, dtype=complex)
-
-print("forward transforms")
-rho, Uh_disc = spectrum(U_disc, r_disc)
-_, Uh_ann = spectrum(U_ann, r_ann)
-
+# ── the z-sweep, through the operator layer ──────────────────────────────────
 zg = np.linspace(4.0, 620.0, 260)
-rg = np.linspace(0.0, 34.0, 190)
-print(f"meridional maps ({zg.size} planes)")
-M_disc = np.array([np.abs(replay(rho, Uh_disc, z, rg)) for z in zg]).T
-M_ann = np.array([np.abs(replay(rho, Uh_ann, z, rg)) for z in zg]).T
-
 z_ax = np.linspace(2.0, 620.0, 900)
-ax_disc = np.array([replay(rho, Uh_disc, z, np.zeros(1))[0] for z in z_ax])
-ax_ann = np.array([replay(rho, Uh_ann, z, np.zeros(1))[0] for z in z_ax])
+rg = Grid.polar(np.linspace(0.0, 34.0, 190))
+
+
+def sweep(field, zs, out_grid, density=1.0):
+    """|U| on out_grid at each z: FT2 once, one transfer per plane.
+
+    `density` multiplies the k sampling: the transfer phase k_z·z turns
+    arbitrarily fast at the band edge k → k₀, so quantitative curves at long
+    z deserve a denser quadrature than a map for the eye.
+    """
+    kgrid = field.grid.reciprocal(
+        k_max=1.02 * K,
+        n_k=int(density * (np.ceil(5.0 * 1.02 * K
+                                   * (field.grid.axes[0][-1] + zs.max())
+                                   / (2 * np.pi)) + 1)))
+    plan_in = PolarPlan.build(field.grid, kgrid)
+    plan_out = PolarPlan.build(out_grid, kgrid)
+    F = FT2(field, kgrid=kgrid, plan=plan_in)
+    k = kgrid.axes[0]
+    kz = np.sqrt(np.maximum(K**2 - k**2, 0.0))[:, None, None]
+    live = (k**2 <= K**2)[:, None, None]
+    out = np.empty((out_grid.axes[0].size, zs.size))
+    for j, z in enumerate(zs):
+        Fz = F.like(np.where(live, F.values * np.exp(1j * kz * z), 0.0))
+        out[:, j] = np.abs(IFT2(Fz, grid=out_grid, plan=plan_out).u[:, 0])
+    return out
+
+
+print(f"meridional maps ({zg.size} planes each)")
+M_disc = sweep(disc, zg, rg)
+M_ann = sweep(annulus, zg, rg)
+
+axis_grid = Grid.polar(np.array([0.0, 1e-6]))    # the axis (2 pts: quadrature)
+ax_disc = sweep(disc, z_ax, axis_grid, density=4.0)[0]
+ax_ann = sweep(annulus, z_ax, axis_grid, density=4.0)[0]
 ax_ref = axial_exact(z_ax)
-err = np.abs(np.abs(ax_disc) - np.abs(ax_ref)).max() / np.abs(ax_ref).max()
+err = np.abs(ax_disc - np.abs(ax_ref)).max() / np.abs(ax_ref).max()
 print(f"on-axis: max deviation from the closed form = {err:.2e}")
 
 # The two exact propagators, compared where both are comfortably sampled.
 Z_X = 300.0
-r_x = np.linspace(0.0, 34.0, 120)
-x_asm = replay(rho, Uh_disc, Z_X, r_x)
-x_rs1 = rs1_plane(U_disc, r_disc, Z_X, N_MED, LAM, r_x)
-d_x = np.abs(np.abs(x_asm) - np.abs(x_rs1)).max() / np.abs(x_rs1).max()
-print(f"ASM vs RS1 at z = {Z_X:g}λ: max relative difference = {d_x:.2e}")
+out_x = Grid.polar(np.linspace(0.0, 34.0, 120))
+x_asm = sweep(disc, np.array([Z_X]), out_x)[:, 0]
+x_rs1 = np.abs(rayleigh_sommerfeld(disc, Z_X, output_grid=out_x).u[:, 0])
+d_x = np.abs(x_asm - x_rs1).max() / x_rs1.max()
+print(f"ASM vs Rayleigh–Sommerfeld at z = {Z_X:g}λ: "
+      f"max relative difference = {d_x:.2e}")
 
-# Far field.  RS1 integrates in real space and stays accurate at any distance;
-# the ASM would need a far finer ρ grid here, because exp(i kz z) oscillates
-# ever faster in ρ as z grows.  Regimes, not favourites.
+# Far field: the Fraunhofer operator against the closed-form Airy pattern.
 Z_FF = 3000.0
-r_ff = np.linspace(0.0, 900.0, 260)
-ff_rs1 = rs1_plane(U_disc, r_disc, Z_FF, N_MED, LAM, r_ff)
-ff_ann = rs1_plane(U_ann, r_ann, Z_FF, N_MED, LAM, r_ff)
-theta = np.arctan2(r_ff, Z_FF)
+out_ff = Grid.polar(np.linspace(0.0, 900.0, 260))
+ff_disc = fraunhofer(disc, Z_FF, output_grid=out_ff)
+ff_ann = fraunhofer(annulus, Z_FF, output_grid=out_ff)
+theta = np.arctan2(out_ff.axes[0], Z_FF)
 airy_r = airy(theta)
-i_rs1 = np.abs(ff_rs1) ** 2 / np.abs(ff_rs1[0]) ** 2
-d_ff = np.abs(i_rs1 - airy_r).max()
-print(f"far field: max |RS1 − Airy| = {d_ff:.2e}")
+i_disc = np.abs(ff_disc.u[:, 0]) ** 2 / np.abs(ff_disc.u[0, 0]) ** 2
+i_ann = np.abs(ff_ann.u[:, 0]) ** 2 / np.abs(ff_ann.u[0, 0]) ** 2
+d_ff = np.abs(i_disc - airy_r).max()
+print(f"far field: max |fraunhofer − Airy| = {d_ff:.2e}")
 
 
 # ── figure ───────────────────────────────────────────────────────────────────
 fig = plt.figure(figsize=(14.0, 9.2))
 gs = fig.add_gridspec(2, 2, height_ratios=[1.0, 0.95], hspace=0.40,
-                      wspace=0.21, top=0.90, bottom=0.14, left=0.055, right=0.985)
+                      wspace=0.21, top=0.90, bottom=0.14, left=0.055,
+                      right=0.985)
 
 
 def meridian(a, M, title, sub, aperture):
-    rr = np.concatenate([-rg[::-1], rg[1:]])
+    r_ax = rg.axes[0]
+    rr = np.concatenate([-r_ax[::-1], r_ax[1:]])
     MM = np.vstack([M[::-1], M[1:]])
     im = a.imshow(np.log10(np.maximum(MM, 1e-2)),
                   extent=[zg[0], zg[-1], rr[0], rr[-1]], origin="lower",
@@ -141,9 +158,9 @@ meridian(fig.add_subplot(gs[0, 1]), M_ann,
 a = fig.add_subplot(gs[1, 0])
 a.plot(z_ax, np.abs(ax_ref) ** 2, color=GREEN, lw=3.0,
        label="closed form, disc:  |e^{ikz} − (z/R)e^{ikR}|²")
-a.plot(z_ax, np.abs(ax_disc) ** 2, color=RED, lw=1.5, ls=(0, (5, 3)),
+a.plot(z_ax, ax_disc ** 2, color=RED, lw=1.5, ls=(0, (5, 3)),
        label="angular spectrum, disc")
-a.plot(z_ax, np.abs(ax_ann) ** 2, color=BLUE, lw=1.5, label="angular spectrum, annulus")
+a.plot(z_ax, ax_ann ** 2, color=BLUE, lw=1.5, label="angular spectrum, annulus")
 a.set_xlim(z_ax[0], z_ax[-1]); a.set_ylim(0, 4.6)
 a.set_xlabel("z  [λ]"); a.set_ylabel("|U|²  on the axis")
 a.legend(fontsize=8.5, loc="upper right", ncol=1)
@@ -152,20 +169,20 @@ ttl(a, "On-axis intensity, and what it should be",
     f"max deviation from the closed form {err:.1e}")
 
 a = fig.add_subplot(gs[1, 1])
-xa = r_ff / (0.61 * LAM / (A_OUT / Z_FF))
+xa = out_ff.axes[0] / (0.61 * LAM / (A_OUT / Z_FF))
 a.semilogy(xa, airy_r, color=GREEN, lw=3.0, label="Airy pattern [2J₁(x)/x]²")
-a.semilogy(xa, i_rs1, color=RED, lw=1.5, ls=(0, (5, 3)),
-           label="Rayleigh–Sommerfeld I, disc")
-a.semilogy(xa, np.abs(ff_ann) ** 2 / np.abs(ff_ann[0]) ** 2, color=BLUE, lw=1.5,
-           label="Rayleigh–Sommerfeld I, annulus")
+a.semilogy(xa, i_disc, color=RED, lw=1.5, ls=(0, (5, 3)),
+           label="fraunhofer, disc")
+a.semilogy(xa, i_ann, color=BLUE, lw=1.5, label="fraunhofer, annulus")
 a.axvline(1.0, color=MUTED, lw=1.0)
 a.text(1.06, 3e-5, "first Airy zero\n0.61 λ/NA", fontsize=8, color=MUTED)
 a.set_xlim(0, xa[-1]); a.set_ylim(1e-5, 1.6)
 a.set_xlabel("r  [Airy radii]"); a.set_ylabel("I / I(0)")
 a.legend(fontsize=8.5, loc="upper right")
 ttl(a, f"Far field at z = {Z_FF:.0f}λ",
-    f"the exact integral against the Fraunhofer limit · max difference "
-    f"{d_ff:.1e} · the annulus narrows the core and pumps the rings")
+    f"the far-field operator against the closed-form Airy pattern · "
+    f"max difference {d_ff:.1e} · the annulus narrows the core and pumps "
+    f"the rings")
 
 fig.suptitle("Diffraction by a hard aperture — computed exactly, then checked "
              "against closed form", fontsize=12.5, fontweight="bold",

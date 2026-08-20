@@ -25,7 +25,7 @@ from scipy.special import j0
 
 from diffractor.analysis import opd_waves
 from diffractor.optics import Medium, stigmatic_interface
-from diffractor.propagation import ray_tube_amplitude, stigmatic_pupil
+from diffractor.transport import ray_tube_amplitude, stigmatic_pupil
 from diffractor.scattering import T_s
 from style import BLUE, EDGE, GREEN, INK2, MUTED, ORANGE, RED, VIOLET, save, ttl
 
