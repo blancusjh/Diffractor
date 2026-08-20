@@ -56,7 +56,14 @@ def stigmatic_pupil(interface, g):
     The stigmatic special case of :func:`ray_tube_amplitude`: both legs are
     exact spherical waves, so the tube Jacobians collapse via the identity
     w2/w1 = (cos i2/cos i1)(d1/d2)² and only the 1/d factors survive.
-    Verified against the BOR-BEM wave solution (absolute ratio 1.0025).
+
+    Validation status: an earlier BOR-BEM measurement appeared to confirm this
+    pupil to 0.25 %, but that measurement is RETRACTED — the closed benchmark
+    body turned out to be a lossless cavity whose reverberant field
+    contaminated the pupil edge (see benchmarks/cases.md and PLAN.md, fase 1).
+    The prediction awaits the open-surface benchmark; what stands today is the
+    machine-level identity with the general ray-tube law, asserted in the test
+    suite.
 
     ``g`` is a geometric sample of the interface profile.
     """
