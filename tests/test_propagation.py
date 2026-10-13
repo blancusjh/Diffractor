@@ -1,176 +1,235 @@
-"""Propagation: one method set, every basis — checked against closed forms."""
-
-import warnings
-
 import numpy as np
 import pytest
-from scipy.special import j1
 
-from diffractor import (Field, Grid, Medium, MonochromaticField, Spectrum,
-                        angular_spectrum, fraunhofer, fresnel,
-                        fresnel_validity_distance, rayleigh_sommerfeld,
-                        spectral_budget)
-
-LAM = 1.0                       # unit wavelength: everything in λ
-
-
-def _disc_field(a=15.0, n_r=3001):
-    g = Grid.polar(np.linspace(0.0, a, n_r))
-    return MonochromaticField(g, np.ones(g.shape), LAM)
-
-
-def _axial_exact(z, a=15.0):
-    """Closed-form on-axis field of a uniformly lit disc (RS-I integrates to
-    exactly this)."""
-    k = 2 * np.pi / LAM
-    R = np.hypot(a, z)
-    return np.exp(1j * k * z) - (z / R) * np.exp(1j * k * R)
+from diffractor import (
+    Field,
+    asm_propagator,
+    circular_aperture,
+    fraunhofer_propagator,
+    fresnel_output_grid,
+    fresnel_propagator,
+    fresnel_zoom_propagator,
+    gaussian_beam,
+    make_grid,
+)
 
 
-def test_asm_disc_on_axis_closed_form():
-    """A hard disc is the polar quadrature's worst case (its spectrum fills
-    the whole propagating band, and the band edge is where kz turns fastest);
-    the deep near field belongs to rayleigh_sommerfeld — checked at ~5e-5 in
-    its own docstring physics — so the tolerance here is the ASM's honest
-    hard-edge accuracy class, not the package's best."""
-    f = _disc_field()
-    for z in (50.0, 120.0, 300.0, 600.0):
-        out = angular_spectrum(f, z)
-        assert abs(abs(out.u[0, 0]) - abs(_axial_exact(z))) < 3e-2
+def circ_field(grid, R):
+    """A hard circular aperture as a complex Field on ``grid``."""
+    x, y = grid
+    return Field(grid, circular_aperture(x, y, R).astype(complex))
 
 
-def test_asm_cartesian_equals_polar_on_smooth_field():
-    """The same supergaussian, cartesian FFT path vs polar Hankel path."""
-    a, lam = 12.0, 0.5
-    x = (np.arange(1024) - 512) * 0.06
-    gc = Grid.cartesian(x, x)
-    X, Y = gc.meshes()
-    R = np.hypot(X, Y)
-    fc = MonochromaticField(gc, np.exp(-(R / a) ** 8), lam)
-    rp = np.linspace(0.0, x[-1], 1500)
-    fp = MonochromaticField(Grid.polar(rp), np.exp(-(rp[:, None] / a) ** 8), lam)
-
-    z = 150.0
-    oc = angular_spectrum(fc, z, pad_factor=2)
-    op = angular_spectrum(fp, z)
-    I_c = np.abs(oc.u[512:, 512]) ** 2
-    I_p = np.interp(x[512:], op.grid.axes[0], np.abs(op.u[:, 0]) ** 2)
-    sel = x[512:] < 22.0
-    assert np.abs(I_c - I_p)[sel].max() < 1e-4 * I_p.max()
+def beam_width(I: np.ndarray, coord: np.ndarray) -> float:
+    """1/e² intensity radius from the second moment of an axisymmetric beam."""
+    total = I.sum()
+    x2 = (I * coord**2).sum() / total
+    return float(2.0 * np.sqrt(x2))
 
 
-def test_fraunhofer_airy_far_field():
-    a, z = 25.0, 3e5
-    lam = 0.5
-    g = Grid.polar(np.linspace(0.0, a, 2001))
-    f = MonochromaticField(g, np.ones(g.shape), lam)
-    out_grid = Grid.polar(np.linspace(0.0, 6000.0, 300))
-    ff = fraunhofer(f, z, output_grid=out_grid)
-    theta = np.arctan2(out_grid.axes[0], z)
-    x = (2 * np.pi / lam) * a * np.sin(theta)
-    airy = np.where(x == 0, 1.0,
-                    (2 * j1(np.where(x == 0, 1, x)) / np.where(x == 0, 1, x)) ** 2)
-    I = np.abs(ff.u[:, 0]) ** 2
-    assert np.abs(I / I[0] - airy).max() < 1e-4
+def analytic_gaussian_width(w0: float, z: float, wavelength: float) -> float:
+    zR = np.pi * w0**2 / wavelength
+    return w0 * np.sqrt(1.0 + (z / zR) ** 2)
 
 
-def test_fresnel_gate_policies():
-    f = _disc_field(a=25.0, n_r=501)
-    z_bad = 0.5 * fresnel_validity_distance(25.0, LAM)
-    with pytest.raises(ValueError, match="validity"):
-        fresnel(f, z_bad)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        fresnel(f, z_bad, policy="warn")
-    assert len(caught) == 1
-    fresnel(f, z_bad, policy="force")          # the caller who knows better
-    with pytest.raises(ValueError, match="raise.*warn.*force"):
-        fresnel(f, z_bad, policy="loose")
-    with pytest.raises(ValueError, match="positive"):
-        fresnel(f, -10.0, policy="force")
+class TestASM:
+    def test_zero_distance_is_identity(self):
+        grid = make_grid(128, 4e-3)
+        U0 = circ_field(grid, 1e-3)
+        out = asm_propagator(U0, z=0.0, wavelength=532e-9)
+        np.testing.assert_allclose(out.values, U0.values, atol=1e-12)
+
+    def test_energy_conservation(self):
+        grid = make_grid(256, 4e-3)
+        U0 = gaussian_beam(grid, waist=0.4e-3)
+        Uz = asm_propagator(U0, z=0.05, wavelength=532e-9)
+        np.testing.assert_allclose(
+            np.sum(np.abs(Uz.values) ** 2), np.sum(np.abs(U0.values) ** 2), rtol=1e-10
+        )
+
+    def test_back_propagation_roundtrip(self):
+        grid = make_grid(256, 4e-3)
+        U0 = gaussian_beam(grid, waist=0.4e-3)
+        Uz = asm_propagator(U0, z=0.05, wavelength=532e-9)
+        Uback = asm_propagator(Uz, z=-0.05, wavelength=532e-9)
+        np.testing.assert_allclose(Uback.values, U0.values, atol=1e-8)
+
+    def test_gaussian_beam_width_matches_analytic(self):
+        wavelength, w0, z = 532e-9, 0.3e-3, 0.2
+        grid = make_grid(512, 8e-3)
+        x, _ = grid
+        Uz = asm_propagator(gaussian_beam(grid, waist=w0), z=z, wavelength=wavelength)
+        measured = beam_width(np.abs(Uz.values) ** 2, x)
+        expected = analytic_gaussian_width(w0, z, wavelength)
+        np.testing.assert_allclose(measured, expected, rtol=1e-3)
+
+    def test_padded_propagation_matches_unpadded_for_contained_field(self):
+        grid = make_grid(256, 8e-3)
+        U0 = gaussian_beam(grid, waist=0.3e-3)
+        U_plain = asm_propagator(U0, z=0.05, wavelength=532e-9)
+        U_padded = asm_propagator(U0, z=0.05, wavelength=532e-9, pad_factor=2)
+        assert U_padded.shape == U0.shape
+        np.testing.assert_allclose(U_padded.values, U_plain.values, atol=1e-6)
+
+    def test_padding_equals_natively_larger_grid(self):
+        n, L, z, wavelength = 128, 3e-3, 0.5, 532e-9
+        small = make_grid(n, L)
+        U0 = circ_field(small, 0.3e-3)
+        U_padded = asm_propagator(
+            U0, z=z, wavelength=wavelength, bandlimit=False, pad_factor=4
+        )
+        large = make_grid(4 * n, 4 * L)
+        U0_large = circ_field(large, 0.3e-3)
+        U_reference = asm_propagator(U0_large, z=z, wavelength=wavelength, bandlimit=False)
+        m = (4 * n - n) // 2
+        np.testing.assert_allclose(
+            U_padded.values, U_reference.values[m : m + n, m : m + n], atol=1e-12
+        )
+
+    def test_bandlimit_zeroes_undersampled_frequencies(self):
+        n, L, z, wavelength = 256, 6e-3, 2.0, 532e-9
+        grid = make_grid(n, L)
+        x, _ = grid
+        df = 1.0 / L
+        f_limit = 1.0 / (wavelength * np.sqrt((2 * df * z) ** 2 + 1))
+        f0 = 48 * df
+        assert f_limit < f0 < 1.0 / (2 * (L / n))
+        U0 = Field(grid, np.exp(2j * np.pi * f0 * x))
+        U_clean = asm_propagator(U0, z=z, wavelength=wavelength, bandlimit=True)
+        U_alias = asm_propagator(U0, z=z, wavelength=wavelength, bandlimit=False)
+        np.testing.assert_allclose(np.abs(U_clean.values), 0.0, atol=1e-10)
+        np.testing.assert_allclose(np.abs(U_alias.values), 1.0, atol=1e-10)
+
+    def test_rejects_bad_pad_factor(self):
+        grid = make_grid(64, 1e-3)
+        U0 = Field(grid, np.ones((64, 64), dtype=complex))
+        with pytest.raises(ValueError):
+            asm_propagator(U0, z=0.1, wavelength=532e-9, pad_factor=0)
+
+    def test_evanescent_components_decay(self):
+        grid = make_grid(128, 20e-6)
+        rng = np.random.default_rng(2)
+        U0 = Field(grid, rng.standard_normal((128, 128)) + 0.0j)
+        wavelength = 532e-9
+        U_filtered = asm_propagator(U0, z=1e-6, wavelength=wavelength, bandlimit=False)
+        U_evanescent = asm_propagator(
+            U0, z=1e-6, wavelength=wavelength, include_evanescent=True, bandlimit=False
+        )
+        E0 = np.sum(np.abs(U0.values) ** 2)
+        E_f = np.sum(np.abs(U_filtered.values) ** 2)
+        E_e = np.sum(np.abs(U_evanescent.values) ** 2)
+        assert E_f < E0
+        assert E_f < E_e < E0
+
+    def test_output_grid_matches_native_on_same_grid(self):
+        # Decoupled path with output_grid == input grid must reproduce the
+        # native FFT propagation.
+        grid = make_grid(128, 4e-3)
+        U0 = gaussian_beam(grid, waist=0.4e-3)
+        native = asm_propagator(U0, z=0.03, wavelength=532e-9)
+        decoupled = asm_propagator(U0, z=0.03, wavelength=532e-9, output_grid=grid)
+        np.testing.assert_allclose(decoupled.values, native.values, atol=1e-9)
 
 
-def test_fresnel_polychromatic_requires_output_grid():
-    g = Grid.polar(np.linspace(0.0, 25.0, 501))
-    f = Field(g, np.ones((*g.shape, 3)), Spectrum.flat(0.4, 0.7, 3))
-    with pytest.raises(ValueError, match="output_grid"):
-        fresnel(f, 1e5)
-    out = fresnel(f, 1e5, output_grid=Grid.polar(np.linspace(0.0, 4000.0, 64)))
-    assert out.values.shape == (64, 1, 3)
+class TestFresnel:
+    def test_gaussian_beam_width_matches_analytic(self):
+        wavelength, w0, z = 532e-9, 0.3e-3, 1.0
+        grid = make_grid(1024, 12e-3)
+        Uz = fresnel_propagator(gaussian_beam(grid, waist=w0), z=z, wavelength=wavelength)
+        x_out, _ = fresnel_output_grid(grid, z=z, wavelength=wavelength)
+        measured = beam_width(np.abs(Uz.values) ** 2, x_out)
+        expected = analytic_gaussian_width(w0, z, wavelength)
+        np.testing.assert_allclose(measured, expected, rtol=1e-3)
+
+    def test_output_grid_scaling(self):
+        grid = make_grid(256, 4e-3)
+        wavelength, z, n = 532e-9, 0.5, 1.5
+        x_out, y_out = fresnel_output_grid(grid, z=z, wavelength=wavelength, n=n)
+        dx = 4e-3 / 256
+        expected_spacing = (wavelength / n) * z / (256 * dx)
+        np.testing.assert_allclose(x_out[0, 1] - x_out[0, 0], expected_spacing)
+        np.testing.assert_allclose(y_out[1, 0] - y_out[0, 0], expected_spacing)
+
+    def test_rejects_zero_distance(self):
+        grid = make_grid(64, 1e-3)
+        U0 = Field(grid, np.ones((64, 64), dtype=complex))
+        with pytest.raises(ValueError):
+            fresnel_propagator(U0, z=0.0, wavelength=532e-9)
+
+    def test_rejects_bad_medium(self):
+        grid = make_grid(64, 1e-3)
+        with pytest.raises(ValueError):
+            fresnel_output_grid(grid, z=1.0, wavelength=-1.0)
+        with pytest.raises(ValueError):
+            fresnel_output_grid(grid, z=1.0, wavelength=532e-9, n=0.0)
 
 
-def test_fresnel_zoom_equals_scaled_grid_mode():
-    """The explicit-window (zoom) evaluation, asked for the natural scaled
-    grid's own nodes, reproduces the natural-grid result."""
-    f = _disc_field(a=25.0, n_r=1201)
-    z = 5e4
-    natural = fresnel(f, z)
-    zoom = fresnel(f, z, output_grid=natural.grid)
-    scale = np.abs(natural.u).max()
-    assert np.abs(zoom.u - natural.u).max() < 1e-8 * scale
+class TestFresnelZoom:
+    def test_gaussian_matches_analytic_amplitude_and_width(self):
+        wavelength, w0, z = 532e-9, 0.3e-3, 1.0
+        grid = make_grid(1024, 12e-3)
+        out = fresnel_zoom_propagator(
+            gaussian_beam(grid, waist=w0),
+            z=z,
+            wavelength=wavelength,
+            output_half_width=2e-3,
+            output_samples=256,
+        )
+        assert out.shape == (256, 256)
+        x_out = out.grid.x
+        w_z = analytic_gaussian_width(w0, z, wavelength)
+        measured = beam_width(np.abs(out.values) ** 2, x_out)
+        np.testing.assert_allclose(measured, w_z, rtol=1e-3)
+        c = 256 // 2
+        np.testing.assert_allclose(np.abs(out.values[c, c]), w0 / w_z, rtol=1e-3)
+
+    def test_rejects_bad_parameters(self):
+        grid = make_grid(64, 1e-3)
+        U0 = Field(grid, np.ones((64, 64), dtype=complex))
+        with pytest.raises(ValueError):
+            fresnel_zoom_propagator(U0, z=0.0, wavelength=532e-9, output_half_width=1e-3)
+        with pytest.raises(ValueError):
+            fresnel_zoom_propagator(U0, z=1.0, wavelength=532e-9, output_half_width=-1e-3)
+        with pytest.raises(ValueError):
+            fresnel_zoom_propagator(
+                U0, z=1.0, wavelength=532e-9, output_half_width=1e-3, output_samples=1
+            )
 
 
-def test_rayleigh_sommerfeld_refuses_non_axisymmetric():
-    g = Grid.polar(np.linspace(0.0, 10.0, 64), n_theta=4)
-    f = MonochromaticField(g, np.ones(g.shape), LAM)
-    with pytest.raises(ValueError, match="axisymmetric"):
-        rayleigh_sommerfeld(f, 10.0)
-    x = np.linspace(-1, 1, 16)
-    fc = MonochromaticField(Grid.cartesian(x, x), np.ones((16, 16)), LAM)
-    with pytest.raises(ValueError, match="angular_spectrum"):
-        rayleigh_sommerfeld(fc, 10.0)
+class TestFraunhofer:
+    def test_airy_first_zero(self):
+        wavelength, D, z = 532e-9, 0.6e-3, 10.0
+        grid = make_grid(2048, 8e-3)
+        U0 = circ_field(grid, D / 2)
+        Uz = fraunhofer_propagator(U0, z=z, wavelength=wavelength)
+        x_out, _ = fresnel_output_grid(grid, z=z, wavelength=wavelength)
+        center = 2048 // 2
+        profile = np.abs(Uz.values[center, center:]) ** 2
+        r = x_out[center, center:]
+        first_min = np.argmax((profile[1:-1] < profile[:-2]) & (profile[1:-1] < profile[2:])) + 1
+        expected = 1.22 * wavelength * z / D
+        np.testing.assert_allclose(r[first_min], expected, rtol=2e-2)
 
 
-def test_spectral_budget_smooth_vs_sharp():
-    r = np.linspace(0.0, 30.0, 3000)
-    g = Grid.polar(r)
-    smooth = MonochromaticField(g, np.exp(-(r[:, None] / 10.0) ** 2), LAM)
-    sharp = MonochromaticField(g, (r[:, None] <= 10.0).astype(complex), LAM)
-    b_smooth = spectral_budget(smooth)
-    b_sharp = spectral_budget(sharp)
-    assert b_smooth[0] < 1e-4
-    assert b_sharp[0] > 10 * max(b_smooth[0], 1e-12)
+def test_single_fft_fresnel_rejects_nonpositive_z():
+    import numpy as np
+    import pytest
+    from diffractor import (
+        MonochromaticField,
+        circular_aperture,
+        fraunhofer_propagator,
+        fresnel_output_grid,
+        fresnel_propagator,
+        make_grid,
+    )
 
-
-def test_spectral_axis_matches_per_wavelength_loop():
-    """One broadband propagation = n monochromatic propagations."""
-    r = np.linspace(0.0, 20.0, 800)
-    g = Grid.polar(r)
-    spec = Spectrum.flat(0.45, 0.65, 4)
-    vals = np.exp(-(r[:, None, None] / 8.0) ** 2) * np.ones((1, 1, 4))
-    f = Field(g, vals, spec)
-    kg = g.reciprocal(k_max=1.02 * 2 * np.pi / 0.45, n_k=2000)
-    out = angular_spectrum(f, 60.0, kgrid=kg)
-    for l, (lam, _) in enumerate(spec):
-        mono = MonochromaticField(g, vals[..., l], lam)
-        out_l = angular_spectrum(mono, 60.0, kgrid=kg)
-        assert np.allclose(out.values[..., l], out_l.values[..., 0],
-                           rtol=0, atol=1e-12 * np.abs(out_l.values).max())
-
-
-def test_propagators_preserve_monochromatic_type():
-    f = _disc_field(n_r=501)
-    for out in (angular_spectrum(f, 100.0),
-                fresnel(f, 1e5),
-                rayleigh_sommerfeld(f, 100.0)):
-        assert type(out) is MonochromaticField
-        assert out.wavelength == f.wavelength
-
-
-def test_polar_options_refused_where_meaningless():
-    f = _disc_field(n_r=201)
-    with pytest.raises(ValueError, match="quadrature"):
-        angular_spectrum(f, 10.0, pad_factor=2)
-    with pytest.raises(ValueError, match="quadrature"):
-        angular_spectrum(f, 10.0, bandlimit=True)
-
-
-def test_back_propagation_round_trip():
-    """ASM with z then −z is the identity on the propagating band."""
-    r = np.linspace(0.0, 20.0, 1000)
-    g = Grid.polar(r)
-    f = MonochromaticField(g, np.exp(-(r[:, None] / 6.0) ** 2), LAM)
-    kg = g.reciprocal(k_max=1.02 * 2 * np.pi, n_k=1500)
-    there = angular_spectrum(f, 40.0, kgrid=kg)
-    back = angular_spectrum(there, -40.0, kgrid=kg)
-    assert np.abs(back.u - f.u).max() < 5e-3
+    grid = make_grid(64, 2e-3)
+    U0 = MonochromaticField(grid, 1.0).add_aperture(
+        circular_aperture, 0.5e-3, antialiased=True).to_field()
+    for z in (0.0, -0.1):
+        with pytest.raises(ValueError):
+            fresnel_output_grid(grid, z, 532e-9)
+        with pytest.raises(ValueError):
+            fresnel_propagator(U0, z=z, wavelength=532e-9)
+        with pytest.raises(ValueError):
+            fraunhofer_propagator(U0, z=z, wavelength=532e-9)

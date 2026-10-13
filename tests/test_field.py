@@ -1,62 +1,83 @@
-"""The Field contract: shape, spectral weighting, and type preservation."""
-
 import numpy as np
 import pytest
 
-from diffractor.field import Field, MonochromaticField
-from diffractor.optics import Medium
-from diffractor.space import Grid
-from diffractor.spectrum import Spectrum
-from diffractor.units import nm, um
-
-GRID = Grid.polar(np.linspace(0, 50 * um, 65), n_theta=4)
+from diffractor import Field, make_grid
 
 
-def test_field_shape_contract():
-    s = Spectrum.flat(400 * nm, 700 * nm, 3)
-    f = Field(GRID, np.ones((*GRID.shape, 3)), s)
-    assert f.values.shape == (65, 4, 3) and f.values.dtype == complex
-    with pytest.raises(ValueError, match="does not match"):
-        Field(GRID, np.ones((65, 4, 2)), s)
-    with pytest.raises(ValueError, match="domain"):
-        Field(GRID, np.ones((65, 4, 3)), s, domain="fourier")
+def _field(n=16, L=1.0, domain="space"):
+    grid = make_grid(n, L)
+    values = np.ones((n, n), dtype=complex)
+    return Field(grid, values, domain=domain), grid
 
 
-def test_monochromatic_expands_trailing_axis():
-    f = MonochromaticField(GRID, np.ones(GRID.shape), 532 * nm)
-    assert f.values.shape == (65, 4, 1)
-    assert f.u.shape == GRID.shape
-    assert f.wavelength == 532 * nm
-    assert f.spectrum.n == 1
+def test_construction_and_accessors():
+    field, grid = _field()
+    assert field.grid is grid
+    assert field.shape == (16, 16)
+    assert field.domain == "space"
+    # coordinate access lives on the grid, not the field
+    assert not hasattr(field, "x")
+    assert not hasattr(field, "spacing")
 
 
-def test_like_preserves_monochromatic_type():
-    f = MonochromaticField(GRID, np.ones(GRID.shape), 532 * nm,
-                           medium=Medium(1.5))
-    g = f.like(2.0 * f.values, domain="frequency")
-    assert type(g) is MonochromaticField
-    assert g.wavelength == f.wavelength and g.medium.n == 1.5
-    assert g.domain == "frequency"
-    h = g.like(g.values, medium=Medium(2.0))
-    assert h.medium.n == 2.0 and h.domain == "frequency"
+def test_intensity():
+    grid = make_grid(8, 1.0)
+    field = Field(grid, 2.0 * np.ones((8, 8), dtype=complex))
+    np.testing.assert_allclose(field.intensity, 4.0)
 
 
-def test_intensity_weights_spectrum():
-    s = Spectrum([500 * nm, 600 * nm], [1.0, 3.0])
-    vals = np.ones((*GRID.shape, 2))
-    vals[..., 1] = 2.0
-    f = Field(GRID, vals, s)
-    assert np.allclose(f.intensity, 1.0 * 1.0 + 3.0 * 4.0)
-    assert f.spectral_intensity.shape == (*GRID.shape, 2)
+def test_mul_by_scalar_and_array():
+    field, _ = _field()
+    scaled = field * 3.0
+    np.testing.assert_allclose(scaled.values, 3.0)
+    assert scaled.grid is field.grid
+    mask = np.zeros((16, 16), dtype=complex)
+    masked = field * mask
+    np.testing.assert_allclose(masked.values, 0.0)
+    # commutes
+    np.testing.assert_allclose((3.0 * field).values, 3.0)
 
 
-def test_power_uses_grid_weights():
-    R = 50 * um
-    f = MonochromaticField(GRID, np.ones(GRID.shape), 532 * nm)
-    assert np.allclose(f.power(), np.pi * R**2, rtol=1e-9)
+def test_mul_by_field_same_grid():
+    grid = make_grid(8, 1.0)
+    a = Field(grid, 2.0 * np.ones((8, 8), dtype=complex))
+    b = Field(grid, 3.0 * np.ones((8, 8), dtype=complex))
+    np.testing.assert_allclose((a * b).values, 6.0)
 
 
-def test_amplitude_and_phase_are_per_line():
-    f = MonochromaticField(GRID, 1j * np.ones(GRID.shape), 532 * nm)
-    assert np.allclose(f.amplitude, 1.0)
-    assert np.allclose(f.phase, np.pi / 2)
+def test_mul_by_field_different_grid_raises():
+    a, _ = _field(n=8, L=1.0)
+    b, _ = _field(n=8, L=2.0)  # same shape, different coordinates
+    with pytest.raises(ValueError):
+        _ = a * b
+
+
+def test_like_preserves_grid_and_domain():
+    field, grid = _field(domain="frequency")
+    new = field.like(np.zeros((16, 16), dtype=complex))
+    assert new.grid is grid
+    assert new.domain == "frequency"
+    np.testing.assert_allclose(new.values, 0.0)
+
+
+def test_shape_mismatch_rejected():
+    grid = make_grid(8, 1.0)
+    with pytest.raises(ValueError):
+        Field(grid, np.ones((4, 4), dtype=complex))
+
+
+def test_bad_domain_rejected():
+    grid = make_grid(8, 1.0)
+    with pytest.raises(ValueError):
+        Field(grid, np.ones((8, 8), dtype=complex), domain="momentum")
+
+
+def test_frozen():
+    field, _ = _field()
+    with pytest.raises(Exception):
+        field.values = np.zeros((16, 16), dtype=complex)
+
+
+def test_xp_is_numpy_on_cpu():
+    field, _ = _field()
+    assert field.xp is np
