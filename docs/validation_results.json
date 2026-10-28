@@ -1,0 +1,81 @@
+{
+  "repository_sha": "810284f18e73f4234b8ffcb8a64809354ac1ec4f",
+  "diffractor_version": "0.7.0",
+  "dependencies": {
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "matplotlib": "3.11.2"
+  },
+  "wavelength_m": 5.32e-7,
+  "medium_index": 1,
+  "lens": {
+    "focal_length_m": 0.1,
+    "diameter_m": 0.002,
+    "input_window_m": 0.0032,
+    "input_samples": [
+      512,
+      768
+    ],
+    "pupil_subsamples_per_axis": 8,
+    "input_dx_m": [
+      0.00000625,
+      0.000004166666666666667
+    ],
+    "fresnel_number_radius_squared_over_lambda_f": 18.796992481203006,
+    "theoretical_peak_relative_intensity": 3487.19698721287,
+    "computed_peak_relative_intensity": 3487.255307391315,
+    "peak_relative_error": 0.000016724084890729074,
+    "theoretical_first_zero_radius_m": 0.000032443219107689025,
+    "computed_first_zero_radius_m": 0.00003247351119806434,
+    "first_zero_relative_error": 0.0009336955828818105,
+    "profile_rms_error_relative_to_theoretical_peak": 0.000004000976662227153,
+    "profile_max_error_relative_to_theoretical_peak": 0.000016724084890729074,
+    "sampling_512_to_768_max_profile_change": 0.000012261425877513332,
+    "sampled_pupil_area_relative_error_768": 0.000008362007495987811
+  },
+  "double_slit": {
+    "slit_width_m": 0.000125,
+    "separation_m": 0.000375,
+    "height_m": 0.001,
+    "focal_length_m": 0.1,
+    "theoretical_fringe_period_m": 0.00014186666666666668,
+    "profile_rms_error_relative_to_theoretical_peak": 0.0002696813809021766,
+    "profile_max_error_relative_to_theoretical_peak": 0.0005735469695691275,
+    "sampling_512_to_768_max_profile_change": 0.0007167137931014533
+  },
+  "longitudinal": {
+    "method": "angular spectrum, bandlimit=True, pad_factor=2",
+    "input_samples": 512,
+    "focus_pad2_to_pad3_max_change_over_theoretical_peak": 0.00002478865103692024,
+    "focus_peak_relative_error_vs_paraxial_theory": 0.00009588382380953941,
+    "axial_sampling_m": 0.001,
+    "focus_note": "The 1 mm axial sampling does not resolve submillimeter diffraction focal shift.",
+    "z_range_m": [
+      0,
+      0.18
+    ],
+    "z_samples": 181,
+    "transverse_range_m": [
+      -0.0011,
+      0.0011
+    ],
+    "transverse_samples": 641,
+    "global_peak_relative_intensity": 3486.862621431359,
+    "z_at_sampled_global_peak_m": 0.1,
+    "x_at_sampled_global_peak_m": 0,
+    "normalization": "one global maximum across all z; never per plane"
+  },
+  "model": "Scalar monochromatic thin-lens optics. Focal panels use the paraxial Fresnel integral; the longitudinal panel uses angular spectrum. Finite sampling and aperture pixel integration limit accuracy. Relative intensity assumes unit incident amplitude, not calibrated watts.",
+  "checks": {
+    "airy_peak_error_below_1_percent": true,
+    "airy_radius_error_below_1_percent": true,
+    "airy_profile_rms_below_0_5_percent": true,
+    "airy_sampling_change_below_1_percent": true,
+    "slit_profile_rms_below_0_5_percent": true,
+    "slit_sampling_change_below_1_percent": true,
+    "asm_focus_padding_change_below_1_percent": true,
+    "asm_focus_peak_error_below_1_percent": true,
+    "airy_profile_max_error_below_1_percent": true,
+    "slit_profile_max_error_below_1_percent": true
+  }
+}

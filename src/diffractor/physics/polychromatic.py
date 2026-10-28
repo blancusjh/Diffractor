@@ -210,6 +210,12 @@ def propagate_polychromatic_longitudinal(
     controls (``weights``, ``gamut``, ``saturation``, ``stretch``,
     ``brightness``).
 
+    With native sampling, every wavelength must use identical source-grid
+    coordinates, including the perpendicular axis used to select ``offset``.
+    For different source grids, set ``output_half_width`` and ``output_samples``
+    to evaluate every wavelength on one common physical line at exactly
+    ``offset``. Intensities are evaluated there before color compositing.
+
     Parameters
     ----------
     field_of : Field or callable
@@ -233,8 +239,22 @@ def propagate_polychromatic_longitudinal(
 
     frames = []
     z_arr = t_arr = None
+    source_grid = None
     for lam in wavelengths:
         field = build(lam)
+        if output_half_width is None:
+            if source_grid is None:
+                source_grid = field.grid
+            elif not (
+                source_grid.shape == field.grid.shape
+                and np.array_equal(source_grid.x, field.grid.x)
+                and np.array_equal(source_grid.y, field.grid.y)
+            ):
+                raise ValueError(
+                    "Native polychromatic longitudinal sampling requires identical "
+                    "source coordinates at every wavelength; set output_half_width "
+                    "and output_samples to evaluate a common observation line."
+                )
         sec = longitudinal_field(
             field, lam, zs,
             n=n, axis=axis, offset=offset,

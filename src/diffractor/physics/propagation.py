@@ -31,7 +31,7 @@ from typing import Optional
 import numpy as np
 
 from .field import Field
-from ..mathutils.fourier import FFT2, FT2, IFT2, frequency_grid
+from ..mathutils.fourier import FT2, IFT2, frequency_grid
 from ..mathutils.grids import Array, Grid
 
 __all__ = [
@@ -102,8 +102,8 @@ def fresnel_propagator(field: Field, z: float, wavelength: float, n: float = 1.0
     T1 = np.exp(1.0j * k * (x_**2 + y_**2) / (2.0 * z))
     T2 = np.exp(1.0j * k * (x**2 + y**2) / (2.0 * z))
 
-    # dx*dy scales FFT2 into a Riemann-sum approximation of the continuous FT.
-    values = T0 * T1 * (FFT2(T2 * field.values) * dx * dy)
+    # dx*dy scales the coordinate-aware DFT into the continuous FT integral.
+    values = T0 * T1 * (FT2(field.like(T2 * field.values)).values * dx * dy)
     return Field(out_grid, values)
 
 
@@ -123,7 +123,7 @@ def fraunhofer_propagator(field: Field, z: float, wavelength: float, n: float = 
     T0 = np.exp(1.0j * k * z) / (1.0j * wavelength_medium * z)
     T1 = np.exp(1.0j * k * (x_**2 + y_**2) / (2.0 * z))
 
-    values = T0 * T1 * (FFT2(field.values) * dx * dy)
+    values = T0 * T1 * (FT2(field).values * dx * dy)
     return Field(out_grid, values)
 
 
@@ -307,10 +307,13 @@ def asm_propagator(
     if pad_factor > 1:
         pad_x = ((pad_factor - 1) * nx) // 2
         pad_y = ((pad_factor - 1) * ny) // 2
-        U = np.pad(U, ((pad_y, pad_y), (pad_x, pad_x)))
+        U = np.pad(U, (
+            (pad_y, (pad_factor - 1) * ny - pad_y),
+            (pad_x, (pad_factor - 1) * nx - pad_x),
+        ))
         NY, NX = U.shape
-        coords_x = (np.arange(NX) - NX / 2) * dx
-        coords_y = (np.arange(NY) - NY / 2) * dy
+        coords_x = float(grid.x[0, 0]) + (np.arange(NX) - pad_x) * dx
+        coords_y = float(grid.y[0, 0]) + (np.arange(NY) - pad_y) * dy
         gx, gy = np.meshgrid(coords_x, coords_y)
         work_grid = Grid(gx, gy)
     else:

@@ -4,8 +4,8 @@ Two levels live here:
 
 - **Array operators** ``FFT2`` / ``IFFT2`` — centered 2D (inverse) FFTs that
   keep the zero-frequency component at the center of the array, so fields on
-  symmetric grids (from :func:`diffractor.mathutils.grids.make_grid`) transform without
-  extra bookkeeping. These are the fast O(N log N) core on the FFT-native grid.
+  integer-centered sample arrays transform without extra bookkeeping. They
+  do not encode physical coordinate origins. These are the fast O(N log N) core on the FFT-native grid.
 - **Field operators** ``FT2`` / ``IFT2`` — the Fourier transform understood as
   an *operator applied to a* :class:`~diffractor.physics.field.Field`. On the native
   conjugate grid they defer to ``FFT2`` / ``IFFT2``; given an explicit target
@@ -97,8 +97,8 @@ def frequency_grid(grid: Grid) -> Grid:
 # y along axis 0), so a 2D transform factors into a 1D transform per axis.
 # The forward transform samples  G(f) = sum_r phi(r) exp(-2 pi i f . r)  at the
 # requested output coordinates; the inverse divides by the source sample count.
-# Both matrix and chirp-Z engines were validated to reproduce FFT2/IFFT2 on the
-# native grid to machine precision.
+# Field operators include physical origin phases. Bare FFT2/IFFT2 are array
+# operations and agree with them only on integer-centered coordinate grids.
 # --------------------------------------------------------------------------- #
 
 
@@ -185,6 +185,30 @@ def _resolve_engine(engine: str, values, native: bool, dst_grid: Grid) -> str:
     return engine
 
 
+def _origin_phase(grid: Grid, kgrid: Grid, xp, sign: int):
+    """Phase for the offset of a physical grid from the centered FFT lattice."""
+    ny, nx = grid.shape
+    x0 = float(grid.x[0, nx // 2])
+    y0 = float(grid.y[ny // 2, 0])
+    return xp.exp(sign * 2.0j * np.pi * (
+        xp.asarray(kgrid.x) * x0 + xp.asarray(kgrid.y) * y0
+    ))
+
+
+def _ifft2_physical(values, kgrid: Grid, grid: Grid):
+    """Inverse DFT on the native lattice, including both coordinate origins."""
+    xp = array_module(values)
+    ny, nx = kgrid.shape
+    fx0 = float(kgrid.x[0, nx // 2])
+    fy0 = float(kgrid.y[ny // 2, 0])
+    base = Grid(kgrid.x - fx0, kgrid.y - fy0)
+    shifted = values * _origin_phase(grid, base, xp, sign=+1)
+    post = xp.exp(2.0j * np.pi * (
+        fx0 * xp.asarray(grid.x) + fy0 * xp.asarray(grid.y)
+    ))
+    return IFFT2(shifted) * post
+
+
 def FT2(field: Field, *, kgrid: Optional[Grid] = None, engine: str = "auto") -> Field:
     """Forward Fourier operator: sample the transform of ``field`` on ``kgrid``.
 
@@ -205,17 +229,21 @@ def FT2(field: Field, *, kgrid: Optional[Grid] = None, engine: str = "auto") -> 
     -------
     Field
         Transform sampled on ``kgrid`` (or the native grid), ``domain="frequency"``.
+        A native transform records the input grid for the default inverse.
+        Values are discrete sums without sample-area scaling; multiply by
+        ``dx * dy`` to approximate the continuous Fourier integral.
     """
     native = kgrid is None
     target = frequency_grid(field.grid) if native else kgrid
     eng = _resolve_engine(engine, field.values, native, target)
     if eng == "fft":
-        values = FFT2(field.values)
+        values = FFT2(field.values) * _origin_phase(field.grid, target, field.xp, sign=-1)
     elif eng == "czt":
         values = _dft2_czt(field.values, field.grid, target, sign=-1)
     else:
         values = _dft2_matrix(field.values, field.grid, target, sign=-1)
-    return Field(target, values, domain="frequency")
+    return Field(target, values, domain="frequency",
+                 conjugate_grid=field.grid if native else None)
 
 
 def IFT2(field: Field, *, grid: Optional[Grid] = None, engine: str = "auto") -> Field:
@@ -226,9 +254,10 @@ def IFT2(field: Field, *, grid: Optional[Grid] = None, engine: str = "auto") -> 
     field : Field
         Input field (frequency domain).
     grid : Grid, optional
-        Target spatial grid. ``None`` (default) uses the FFT-native conjugate
-        grid (``frequency_grid`` is its own inverse up to the centered
-        convention) and the fast ``IFFT2`` path.
+        Target spatial grid. ``None`` (default) restores the original grid
+        recorded by a native :func:`FT2`, including translations and odd-sized
+        half-cell offsets. A spectral field constructed without that metadata
+        uses the centered conjugate grid from :func:`frequency_grid`.
     engine : {"auto", "fft", "matrix", "czt"}
         As in :func:`FT2`.
 
@@ -239,10 +268,11 @@ def IFT2(field: Field, *, grid: Optional[Grid] = None, engine: str = "auto") -> 
         ``domain="space"``.
     """
     native = grid is None
-    target = frequency_grid(field.grid) if native else grid
+    target = (field.conjugate_grid if field.conjugate_grid is not None
+              else frequency_grid(field.grid)) if native else grid
     eng = _resolve_engine(engine, field.values, native, target)
     if eng == "fft":
-        values = IFFT2(field.values)
+        values = _ifft2_physical(field.values, field.grid, target)
     else:
         n_src = field.grid.shape[0] * field.grid.shape[1]
         if eng == "czt":

@@ -403,6 +403,19 @@ python examples/simple_fresnel_diffraction.py
 
 ## Method notes
 
+- **Coordinate and normalization contract.** `FT2` evaluates the discrete sum
+  `sum U(x, y) exp(-2πi(fx*x + fy*y))`; `IFT2` uses the positive sign and divides
+  by the spectral sample count. Multiply a forward transform by `dx*dy` for
+  the continuous-integral approximation. Physical origin phases are included
+  for translated, odd/even, and rectangular uniform meshgrids. A native `FT2`
+  records the original spatial grid in `Field.conjugate_grid`; `like` and `to`
+  preserve it and the default `IFT2` restores it. An explicit `kgrid`
+  does not record an inverse pairing, even when its coordinates equal the native grid. A separately constructed spectral field
+  defaults to a centered conjugate grid. Bare `FFT2`/`IFFT2` operate only on
+  arrays and carry no physical coordinate convention. `make_grid` continues
+  to sample `[-length/2, length/2)`, including its odd-size half-cell offset;
+  zero-padding extends that same lattice without changing its origin.
+
 - **Single-FFT Fresnel.** The Fresnel integral is evaluated as one FFT with
   pre- and post-multiplication by quadratic phases. The output plane is
   rescaled: its coordinates are `x' = λ z fx`, so the observation window
@@ -439,11 +452,25 @@ python examples/simple_fresnel_diffraction.py
   same physical screen and dispersive features appear at their true positions
   with no resampling. The per-wavelength intensities are integrated against
   the CIE 1931 color-matching functions to CIE XYZ and mapped to sRGB (with
-  add-white gamut handling and the sRGB gamma).
+  add-white gamut handling and the sRGB gamma). Broadband longitudinal
+  sections require identical native source coordinates at every wavelength;
+  use `output_half_width` and `output_samples` to evaluate a common physical
+  observation line when wavelength builders return different grids.
 - **Sampling.** For the single-FFT Fresnel method to be well sampled, the
   quadratic phase must vary slowly between samples: roughly
   `z ≳ N dx² / λ` (exposed as `fresnel_min_distance`). The ASM prefers the
   opposite regime (short distances); the two methods complement each other.
+
+The angular-spectrum sign and forward evanescent-decay convention can also be
+compared with Rafael de la Fuente's
+[explanation](https://rafael-fuente.github.io/simulating-diffraction-patterns-with-the-angular-spectrum-method-and-python.html)
+and [diffractsim implementation](https://github.com/rafael-fuente/diffractsim/blob/fbe7c93919b0c0b71e9307a04d92acf00606d569/diffractsim/propagation_methods/angular_spectrum_method.py).
+[WaveSimulator2D](https://github.com/0x23/WaveSimulator2D/tree/990124d7c641d5e0217380363d7349e2bc69ae50)
+offers complementary inspiration for composing educational wave scenes; it
+solves a time-domain wave equation in pixel/timestep units, whereas Diffractor
+uses monochromatic propagation in SI units. These references inform conventions
+and demonstrations; analytic modes and coordinate sums provide the numerical
+validation here.
 
 ## Tests
 

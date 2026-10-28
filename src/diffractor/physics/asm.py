@@ -111,7 +111,10 @@ class AngularSpectrum:
         if pad_factor > 1:
             self._pad_x = ((pad_factor - 1) * self._nx) // 2
             self._pad_y = ((pad_factor - 1) * self._ny) // 2
-            U = xp.pad(U, ((self._pad_y, self._pad_y), (self._pad_x, self._pad_x)))
+            U = xp.pad(U, (
+                (self._pad_y, (pad_factor - 1) * self._ny - self._pad_y),
+                (self._pad_x, (pad_factor - 1) * self._nx - self._pad_x),
+            ))
         else:
             self._pad_x = self._pad_y = 0
 
@@ -139,8 +142,13 @@ class AngularSpectrum:
         if output_grid is not None:
             src_fx = fx1d  # padded native frequency axes
             src_fy = fy1d
-            dst_x = xp.asarray(output_grid.x[0, :])
-            dst_y = xp.asarray(output_grid.y[:, 0])
+            # _U_fft uses the integer-centered array lattice. Subtract its
+            # physical origin from the requested observation coordinates.
+            # Padding extends the existing lattice without recentering it.
+            x0 = float(grid.x[0, 0]) + (NX // 2 - self._pad_x) * dx
+            y0 = float(grid.y[0, 0]) + (NY // 2 - self._pad_y) * dy
+            dst_x = xp.asarray(output_grid.x[0, :]) - x0
+            dst_y = xp.asarray(output_grid.y[:, 0]) - y0
             self._Ex_inv = xp.exp(2.0j * np.pi * xp.outer(dst_x, src_fx))  # (Mx, NX)
             self._Ey_inv = xp.exp(2.0j * np.pi * xp.outer(dst_y, src_fy))  # (My, NY)
             self._inv_norm = 1.0 / (NY * NX)
