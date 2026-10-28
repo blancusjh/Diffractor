@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: ["codex/coordinate-aware-fourier"]
+    branches: ["main", "codex/coordinate-aware-fourier"]
   pull_request:
   workflow_dispatch:
 

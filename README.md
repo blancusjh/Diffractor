@@ -409,8 +409,8 @@ python examples/simple_fresnel_diffraction.py
   the continuous-integral approximation. Physical origin phases are included
   for translated, odd/even, and rectangular uniform meshgrids. A native `FT2`
   records the original spatial grid in `Field.conjugate_grid`; `like` and `to`
-  preserve it and the default `IFT2` restores it. An explicit non-native `kgrid`
-  does not record an inverse pairing. A separately constructed spectral field
+  preserve it and the default `IFT2` restores it. An explicit `kgrid`
+  does not record an inverse pairing, even when its coordinates equal the native grid. A separately constructed spectral field
   defaults to a centered conjugate grid. Bare `FFT2`/`IFFT2` operate only on
   arrays and carry no physical coordinate convention. `make_grid` continues
   to sample `[-length/2, length/2)`, including its odd-size half-cell offset;
