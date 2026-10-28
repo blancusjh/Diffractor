@@ -1,0 +1,52 @@
+name: Time-domain wave scenes
+
+on:
+  push:
+    branches: ["main", "codex/wavefront-scenes"]
+    paths:
+      - "src/**"
+      - "tests/test_time_domain.py"
+      - "tests/test_wave_scene.py"
+      - "examples/time_domain_wave_scenes.py"
+      - ".github/workflows/wave-scenes.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/test_time_domain.py"
+      - "tests/test_wave_scene.py"
+      - "examples/time_domain_wave_scenes.py"
+      - ".github/workflows/wave-scenes.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wave-scenes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MPLBACKEND: Agg
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package and checks
+        run: python -m pip install -e ".[dev]" ruff==0.17.3
+      - name: Check new wave code formatting and lint
+        run: |
+          python -m ruff format --check src/diffractor/physics/time_domain.py src/diffractor/physics/wave_scene.py src/diffractor/viz/wave_simulation.py examples/time_domain_wave_scenes.py tests/test_time_domain.py tests/test_wave_scene.py
+          python -m ruff check --select E,F,I src/diffractor/physics/time_domain.py src/diffractor/physics/wave_scene.py src/diffractor/viz/wave_simulation.py examples/time_domain_wave_scenes.py tests/test_time_domain.py tests/test_wave_scene.py
+      - name: Verify solver and functional controls
+        run: python -m pytest -q tests/test_time_domain.py tests/test_wave_scene.py
+      - name: Export evolving wave scenes
+        run: python examples/time_domain_wave_scenes.py --scene all --frames 24 --warmup-periods 50 --no-mp4 --output wave-results
+      - uses: actions/upload-artifact@v4
+        with:
+          name: time-domain-wave-scenes
+          path: wave-results/
+          if-no-files-found: error
+          retention-days: 30
