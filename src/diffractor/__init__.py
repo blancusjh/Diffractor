@@ -38,6 +38,8 @@ from .mathutils.sampling import (
 
 # --- physics ----------------------------------------------------------------
 from .physics.field import Field
+from .physics.time_domain import WaveEquation2D
+from .physics.wave_scene import WaveScene, WaveSource
 from .physics.monochromatic import MonochromaticField
 from .physics.coherence import coherent_sum, incoherent_intensity
 from .physics.measurements import sample_field, sample_intensity
@@ -133,6 +135,9 @@ __all__ = [
     "PolychromaticImage",
     "RGBLongitudinalSection",
     "Surface",
+    "WaveEquation2D",
+    "WaveScene",
+    "WaveSource",
     "animate",
     "annular_aperture",
     "array_module",

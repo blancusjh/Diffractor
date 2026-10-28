@@ -1,8 +1,8 @@
 # diffractor
 
-A small, tested scalar-diffraction toolkit built on NumPy. It propagates
-complex optical fields with Fourier-optics methods and models apertures and
-thin refracting surfaces.
+A tested scalar-wave toolkit built on NumPy. It propagates complex optical
+fields with Fourier-optics methods and also evolves real waves through
+spatial refractive-index distributions, reflective walls and damping layers.
 
 ![Stigmatic Cartesian oval vs its osculating paraboloid at NA 0.24 — the incident beam crosses each refracting surface and propagates continuously to (and past) the focus; the oval focuses to a diffraction-limited point while the paraboloid smears into a spherical-aberration caustic.](docs/images/oval_vs_parabola_system.png)
 
@@ -44,8 +44,9 @@ wavelength-independent.
 
 ## Package layout at a glance
 
-The code is split into three subpackages, and every public name is also
-re-exported flat from the top-level `diffractor` namespace:
+The code is split into three subpackages. Core public objects are also
+re-exported from the top-level `diffractor` namespace; the time-domain scene
+builders and interactive viewer have explicit module imports below.
 
 - **`diffractor.physics`** — fields (`MonochromaticField`, `PolychromaticField`,
   `Field`), sources, apertures, gratings, surfaces, propagators,
@@ -60,6 +61,67 @@ re-exported flat from the top-level `diffractor` namespace:
 A tour of what the toolkit renders, organized by feature area. Every image
 below is produced by a runnable script in [`examples/`](examples) — click
 through to reproduce it.
+
+### Time-domain wave scenes
+
+The functional reference for these scenes is
+[0x23/WaveSimulator2D](https://github.com/0x23/WaveSimulator2D): a source drives
+waves through a spatial scene while the user inspects and controls the evolving
+field. Diffractor's NumPy implementation uses a separately tested scalar wave
+solver, scene definitions and a viewer. No reference implementation code is copied.
+
+![Real time-domain propagation through a dielectric lens.](docs/images/lens_time_domain.png)
+
+![Diffraction and interference through two openings in a reflecting wall.](docs/images/double_slit_time_domain.png)
+
+```bash
+python examples/time_domain_wave_scenes.py --scene lens --interactive
+python examples/time_domain_wave_scenes.py --scene double-slit --interactive
+python examples/time_domain_wave_scenes.py --scene all --output wave-results
+```
+
+The viewer provides play/pause, one numerical step, reset, field and running
+mean-square views, and display gain. Source frequency and drive changes apply
+on Reset; the frequency range respects the grid's shortest local wavelength.
+Keyboard controls are Space, N and R. A continuous source or a Gaussian pulse
+can be selected with `--source continuous` or `--source pulse`.
+
+Exports contain GIFs, optional MP4s when FFmpeg is installed, PNGs, final field
+arrays and JSON metadata. Every movie frame advances the PDE. The `quick`
+preset resolves the shortest lens wavelength with 12 cells; `--quality refined`
+uses 16. CPU playback speed depends on the grid and hardware, and optical time
+is slowed for display. Use `--warmup-periods 0` to begin an export at source
+turn-on; the default clip starts after an initial propagation interval.
+
+The model is `u_tt + 2 sigma u_t = (c0/n)^2 Laplacian(u) + forcing`: a
+two-dimensional scalar electric-field reduction for stationary isotropic
+media and constant permeability. It includes reflection and refraction at
+index interfaces. The slit wall is a fixed-zero reflector. The exterior
+absorber is a graded damping sponge with residual reflection, not a PML.
+The running mean square is a field statistic, not electromagnetic intensity.
+
+Build custom scenes by supplying `WaveScene` with a `Grid`, refractive-index
+and damping arrays, a boolean wall mask, and `WaveSource` objects. The source
+profile has a fixed physical width as the grid is refined; its drive is in
+field-amplitude per second squared. The responsibilities are kept separate:
+
+- [`physics/time_domain.py`](src/diffractor/physics/time_domain.py): numerical
+  stepping, CFL validation, initial conditions and energy diagnostics.
+- [`physics/wave_scene.py`](src/diffractor/physics/wave_scene.py): materials,
+  sources, walls, absorbers and example scene construction.
+- [`viz/wave_simulation.py`](src/diffractor/viz/wave_simulation.py): controller,
+  interactive controls, field display and export.
+
+For example, the viewer can be opened without using the CLI:
+
+```python
+from diffractor.physics.wave_scene import lens_scene
+from diffractor.viz.wave_simulation import WaveViewer
+
+scene = lens_scene(points_per_wavelength=24)
+viewer = WaveViewer(scene)
+viewer.show()
+```
 
 ### Basic diffraction
 
