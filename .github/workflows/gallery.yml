@@ -41,15 +41,3 @@ jobs:
           path: validation-results/
           if-no-files-found: error
           retention-days: 30
-      - name: Export review preview
-        run: |
-          python - <<'PY'
-          import base64
-          from pathlib import Path
-          print("GALLERY_PREVIEW_BEGIN")
-          encoded = base64.b64encode(Path("validation-results/validation_gallery.png").read_bytes()).decode("ascii")
-          for start in range(0, len(encoded), 2000):
-              print("GALLERY_PNG:" + encoded[start:start + 2000])
-          print("GALLERY_PREVIEW_END")
-          print("GALLERY_METRICS:" + Path("validation-results/results.json").read_text().replace("\n", ""))
-          PY
