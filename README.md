@@ -490,3 +490,9 @@ src/diffractor/
 examples/                  # runnable demo scripts
 tests/                     # pytest suite
 ```
+
+## License
+
+Original project code and documentation are licensed under the [MIT License](LICENSE).
+Third-party code, publications, datasets, fonts, and other assets retain their
+respective licenses and copyright notices; this license does not replace them.
