@@ -14,7 +14,7 @@ one (``"frequency"``); the Fourier operators flip it.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from ..mathutils.backend import array_module, to_device
 from ..mathutils.grids import Array, Grid
@@ -36,6 +36,11 @@ class Field:
         Complex (or real) samples, NumPy or CuPy, matching ``grid.shape``.
     domain : {"space", "frequency"}
         Which domain the samples live in. Defaults to ``"space"``.
+    conjugate_grid : Grid, optional
+        Original spatial coordinates recorded by a native :func:`FT2`.
+        :func:`IFT2` uses them as its default output grid. ``like`` and ``to``
+        preserve this metadata; a newly constructed spectral field without it
+        defaults to the centered conjugate grid.
 
     Notes
     -----
@@ -46,6 +51,7 @@ class Field:
     grid: Grid
     values: Array
     domain: str = "space"
+    conjugate_grid: Optional[Grid] = None
 
     def __post_init__(self) -> None:
         if self.domain not in ("space", "frequency"):
